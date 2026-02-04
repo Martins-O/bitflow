@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitFlow - Starknet BTC Payment System</title>
+    <link rel="stylesheet" href="../styles/main.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="nav">
+                <h1 class="logo">BitFlow</h1>
+                <div class="nav-links">
+                    <a href="#create" class="nav-link">Create Invoice</a>
+                    <a href="#pay" class="nav-link">Pay Invoice</a>
+                    <a href="#track" class="nav-link">Track Invoice</a>
+                    <button id="wallet-connect" class="btn btn-primary">Connect Wallet</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <h2>Bitcoin Payments on Starknet</h2>
+                    <p>Secure, fast, and escrow-enabled Bitcoin payments using Starknet smart contracts</p>
+                    <div class="wallet-status" id="wallet-status">
+                        <span class="status-indicator disconnected"></span>
+                        <span id="wallet-address">Wallet not connected</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Create Invoice Section -->
+            <section id="create" class="section">
+                <h3>Create Invoice</h3>
+                <form id="create-invoice-form" class="form">
+                    <div class="form-group">
+                        <label for="amount">Amount (BTC)</label>
+                        <input type="number" id="amount" name="amount" step="0.00000001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <input type="text" id="description" name="description" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expiry">Expiry (hours)</label>
+                        <input type="number" id="expiry" name="expiry" min="1" max="8760" value="48" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="escrow-enabled" name="escrowEnabled">
+                            <span class="checkmark"></span>
+                            Enable Escrow Protection
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Invoice</button>
+                </form>
+                <div id="create-result" class="result hidden"></div>
+            </section>
+
+            <!-- Pay Invoice Section -->
+            <section id="pay" class="section">
+                <h3>Pay Invoice</h3>
+                <form id="pay-invoice-form" class="form">
+                    <div class="form-group">
+                        <label for="invoice-id">Invoice ID</label>
+                        <input type="text" id="invoice-id" name="invoiceId" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="use-escrow" name="useEscrow">
+                            <span class="checkmark"></span>
+                            Use Escrow (if available)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Pay Invoice</button>
+                </form>
+                <div id="pay-result" class="result hidden"></div>
+            </section>
+
+            <!-- Track Invoice Section -->
+            <section id="track" class="section">
+                <h3>Track Invoice Status</h3>
+                <form id="track-invoice-form" class="form">
+                    <div class="form-group">
+                        <label for="track-invoice-id">Invoice ID</label>
+                        <input type="text" id="track-invoice-id" name="invoiceId" required>
+                    </div>
+                    <button type="submit" class="btn btn-secondary">Check Status</button>
+                </form>
+                <div id="track-result" class="result hidden"></div>
+            </section>
+
+            <!-- Invoice Dashboard -->
+            <section id="dashboard" class="section">
+                <h3>Invoice Dashboard</h3>
+                <div class="dashboard-controls">
+                    <button id="refresh-dashboard" class="btn btn-secondary">Refresh</button>
+                    <select id="address-filter" class="form-control">
+                        <option value="">All Invoices</option>
+                        <option value="created">Created by me</option>
+                        <option value="paid">Paid by me</option>
+                    </select>
+                </div>
+                <div id="invoice-list" class="invoice-list">
+                    <p class="no-invoices">No invoices found. Connect your wallet to view invoices.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>Processing transaction...</p>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification hidden">
+        <span id="notification-message"></span>
+        <button id="notification-close" class="notification-close">&times;</button>
+    </div>
+
+    <script type="module" src="../src/index.js"></script>
+</body>
+</html>
