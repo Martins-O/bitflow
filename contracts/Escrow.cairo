@@ -2,11 +2,19 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.uint256 import Uint256, uint256_add, uint256_sub, uint256_le
-from starkware.starknet.common.syscalls import get_caller_address
+from starkware.starknet.common.syscalls import get_caller_address, get_block_timestamp
 from starkware.cairo.common.math import assert_le
 
 // Import IERC20 interface
 from contracts.WrappedBTC import IERC20
+
+// Define Escrow interface for external calls
+@interface
+    IEscrow {
+        func deposit(invoiceId: Uint256, payer: felt, amount: Uint256, invoiceCreator: felt) -> (success: felt) {}
+        func release(invoiceId: Uint256) -> (success: felt) {}
+    }
+@end
 
 // Escrow Entry Struct
 struct EscrowEntry {
@@ -59,6 +67,7 @@ struct EscrowEntry {
             wbtcToken: felt,
             invoiceRegistry: felt,
             totalEscrowed: Uint256,
+            owner: felt,
         }
         
         // Constructor
@@ -67,9 +76,10 @@ struct EscrowEntry {
             syscall_ptr: felt*,
             pedersen_ptr: HashBuiltin*,
             range_check_ptr,
-        }(wbtcTokenAddress: felt, invoiceRegistryAddress: felt) {
+        }(wbtcTokenAddress: felt, invoiceRegistryAddress: felt, ownerAddress: felt) {
             wbtcToken.write(wbtcTokenAddress);
             invoiceRegistry.write(invoiceRegistryAddress);
+            owner.write(ownerAddress);
             totalEscrowed.write(Uint256(low: 0, high: 0));
             return ();
         }
@@ -112,6 +122,15 @@ struct EscrowEntry {
             return (totalEscrowed.read());
         }
         
+        @view
+        func getOwner{
+            syscall_ptr: felt*,
+            pedersen_ptr: HashBuiltin*,
+            range_check_ptr,
+        }() -> (address: felt) {
+            return (owner.read());
+        }
+        
         // External Functions
         @external
         func deposit{
@@ -132,8 +151,8 @@ struct EscrowEntry {
             let existingEscrow = escrows.read(invoiceId);
             assert existingEscrow.isActive = 0;
             
-            // Get current timestamp (simplified)
-            let timestamp = Uint256(low: 1640995400, high: 0); // Simplified timestamp
+            // Get current timestamp
+            let (timestamp) = get_block_timestamp();
             
             // Create escrow entry
             let escrowEntry = EscrowEntry(
@@ -187,7 +206,7 @@ struct EscrowEntry {
             assert escrow.invoiceCreator = caller; // Only creator can release
             
             // Get current timestamp
-            let timestamp = Uint256(low: 1640995500, high: 0); // Simplified timestamp
+            let (timestamp) = get_block_timestamp();
             
             // Update escrow entry
             let updatedEscrow = EscrowEntry(
@@ -239,7 +258,7 @@ struct EscrowEntry {
             // For demo, allowing any refund
             
             // Get current timestamp
-            let timestamp = Uint256(low: 1640995600, high: 0); // Simplified timestamp
+            let (timestamp) = get_block_timestamp();
             
             // Update escrow entry
             let updatedEscrow = EscrowEntry(
@@ -283,10 +302,10 @@ struct EscrowEntry {
             range_check_ptr,
         }(invoiceId: Uint256, recipient: felt) -> (success: felt) {
             let (caller) = get_caller_address();
-            let (contractAddress) = get_contract_address();
+            let ownerAddr = owner.read();
             
             // Only contract owner can emergency withdraw
-            assert caller = contractAddress;
+            assert caller = ownerAddr;
             
             let escrow = escrows.read(invoiceId);
             
@@ -294,7 +313,7 @@ struct EscrowEntry {
             assert escrow.isActive = 1;
             
             // Get current timestamp
-            let timestamp = Uint256(low: 1640995700, high: 0); // Simplified timestamp
+            let (timestamp) = get_block_timestamp();
             
             // Update escrow entry
             let updatedEscrow = EscrowEntry(

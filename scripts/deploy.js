@@ -1,4 +1,4 @@
-const { starknet } = require('starknet');
+const starknet = require('starknet');
 require('dotenv').config();
 
 class ContractDeployer {
@@ -36,15 +36,19 @@ class ContractDeployer {
       const wbtcAddress = await this.deployWrappedBTC();
       console.log('✅ WrappedBTC deployed at:', wbtcAddress);
 
-      // Deploy InvoiceRegistry
-      const invoiceRegistryAddress = await this.deployInvoiceRegistry(wbtcAddress);
+      // Deploy InvoiceRegistry (first without escrow address)
+      let invoiceRegistryAddress = await this.deployInvoiceRegistry(wbtcAddress);
       console.log('✅ InvoiceRegistry deployed at:', invoiceRegistryAddress);
 
       // Deploy Escrow
       const escrowAddress = await this.deployEscrow(wbtcAddress, invoiceRegistryAddress);
       console.log('✅ Escrow deployed at:', escrowAddress);
 
-      // Update .env file with new addresses
+      // Redeploy InvoiceRegistry with escrow address
+      invoiceRegistryAddress = await this.deployInvoiceRegistry(wbtcAddress, escrowAddress);
+      console.log('✅ InvoiceRegistry updated at:', invoiceRegistryAddress);
+
+      // Update .env file with final addresses
       await this.updateEnvironment(wbtcAddress, invoiceRegistryAddress, escrowAddress);
 
       console.log('\n🎉 All contracts deployed successfully!');
@@ -81,18 +85,20 @@ class ContractDeployer {
     return contract.address;
   }
 
-  async deployInvoiceRegistry(wbtcAddress) {
+async deployInvoiceRegistry(wbtcAddress, escrowAddress = null) {
     console.log('📋 Deploying InvoiceRegistry contract...');
 
-    // Compile and declare the contract
+    // Compile and declare contract
     const { contractFactory } = await starknet.declareIfNot({
       contract: './contracts/InvoiceRegistry.cairo',
       casm: './contracts/InvoiceRegistry.casm',
       senderAddress: this.account.address,
     });
 
-    // Deploy the contract
-    const constructorCalldata = [wbtcAddress];
+    // Deploy contract with owner address and optionally escrow address
+    const constructorCalldata = escrowAddress 
+      ? [wbtcAddress, escrowAddress, this.account.address]
+      : [wbtcAddress, '0x0', this.account.address]; // Temporary escrow address
 
     const contract = await contractFactory.deploy(constructorCalldata);
     await contract.waitForDeployment();
@@ -100,18 +106,18 @@ class ContractDeployer {
     return contract.address;
   }
 
-  async deployEscrow(wbtcAddress, invoiceRegistryAddress) {
+async deployEscrow(wbtcAddress, invoiceRegistryAddress) {
     console.log('🔒 Deploying Escrow contract...');
 
-    // Compile and declare the contract
+    // Compile and declare contract
     const { contractFactory } = await starknet.declareIfNot({
       contract: './contracts/Escrow.cairo',
       casm: './contracts/Escrow.casm',
       senderAddress: this.account.address,
     });
 
-    // Deploy the contract
-    const constructorCalldata = [wbtcAddress, invoiceRegistryAddress];
+    // Deploy contract with owner address
+    const constructorCalldata = [wbtcAddress, invoiceRegistryAddress, this.account.address];
 
     const contract = await contractFactory.deploy(constructorCalldata);
     await contract.waitForDeployment();

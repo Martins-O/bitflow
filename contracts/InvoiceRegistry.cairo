@@ -2,11 +2,21 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.uint256 import Uint256, uint256_add, uint256_le
-from starkware.starknet.common.syscalls import get_caller_address
+from starkware.starknet.common.syscalls import get_caller_address, get_block_timestamp
 from starkware.cairo.common.math import assert_le
+
+// Import Escrow interface
+from contracts.Escrow import IEscrow
 
 // Import IERC20 interface
 from contracts.WrappedBTC import IERC20
+
+// Import Escrow interface
+@interface
+    IEscrow {
+        func deposit(invoiceId: Uint256, payer: felt, amount: Uint256, invoiceCreator: felt) -> (success: felt) {}
+    }
+@end
 
 // Invoice Status Enum
 namespace InvoiceStatus {
@@ -71,6 +81,7 @@ struct Invoice {
             nextInvoiceId: Uint256,
             wbtcToken: felt,
             escrowContract: felt,
+            owner: felt,
         }
         
         // Constructor
@@ -79,9 +90,10 @@ struct Invoice {
             syscall_ptr: felt*,
             pedersen_ptr: HashBuiltin*,
             range_check_ptr,
-        }(wbtcTokenAddress: felt, escrowContractAddress: felt) {
+        }(wbtcTokenAddress: felt, escrowContractAddress: felt, ownerAddress: felt) {
             wbtcToken.write(wbtcTokenAddress);
             escrowContract.write(escrowContractAddress);
+            owner.write(ownerAddress);
             nextInvoiceId.write(Uint256(low: 1, high: 0));
             return ();
         }
@@ -124,6 +136,15 @@ struct Invoice {
             return (escrowContract.read());
         }
         
+        @view
+        func getOwner{
+            syscall_ptr: felt*,
+            pedersen_ptr: HashBuiltin*,
+            range_check_ptr,
+        }() -> (address: felt) {
+            return (owner.read());
+        }
+        
         // External Functions
         @external
         func createInvoice{
@@ -150,9 +171,8 @@ struct Invoice {
             let nextId = uint256_add(currentId, Uint256(low: 1, high: 0));
             nextInvoiceId.write(nextId);
             
-            // Get current timestamp (simplified - using block timestamp if available)
-            // For demo purposes, using a fixed timestamp
-            let timestamp = Uint256(low: 1640995200, high: 0); // 2022-01-01 00:00:00 UTC
+            // Get current timestamp
+            let (timestamp) = get_block_timestamp();
             
             // Create invoice
             let invoice = Invoice(
@@ -195,8 +215,11 @@ struct Invoice {
             // Validate invoice status
             assert invoice.status = InvoiceStatus.PENDING;
             
-            // Check expiry (simplified - in production would use actual timestamp)
-            // For demo, skipping expiry check
+            // Check expiry
+            let (currentTimestamp) = get_block_timestamp();
+            let (isExpired) = uint256_le(invoice.expiryTimestamp, currentTimestamp);
+            // If expired, cannot pay
+            assert isExpired = 0;
             
             // Transfer tokens
             let wbtcAddr = wbtcToken.read();
@@ -211,7 +234,7 @@ struct Invoice {
             
             // Update paid timestamp
             let updatedInvoice = invoices.read(invoiceId);
-            let timestamp = Uint256(low: 1640995300, high: 0); // Simplified timestamp
+            let (timestamp) = get_block_timestamp();
             let newInvoice = Invoice(
                 id: updatedInvoice.id,
                 creator: updatedInvoice.creator,
@@ -249,13 +272,19 @@ struct Invoice {
             assert invoice.status = InvoiceStatus.PENDING;
             assert invoice.escrowEnabled = 1;
             
-            // Transfer tokens to escrow contract
-            let wbtcAddr = wbtcToken.read();
+            // Check expiry
+            let (currentTimestamp) = get_block_timestamp();
+            let (isExpired) = uint256_le(invoice.expiryTimestamp, currentTimestamp);
+            // If expired, cannot pay
+            assert isExpired = 0;
+            
+            // Call escrow deposit first
             let escrowAddr = escrowContract.read();
-            IERC20.transferFrom{contract_address: wbtcAddr}(
-                sender: payer,
-                recipient: escrowAddr,
-                amount: invoice.amount
+            IEscrow.deposit{contract_address: escrowAddr}(
+                invoiceId: invoiceId,
+                payer: payer,
+                amount: invoice.amount,
+                invoiceCreator: invoice.creator
             );
             
             // Update invoice status
@@ -263,7 +292,7 @@ struct Invoice {
             
             // Update paid timestamp
             let updatedInvoice = invoices.read(invoiceId);
-            let timestamp = Uint256(low: 1640995300, high: 0); // Simplified timestamp
+            let (timestamp) = get_block_timestamp();
             let newInvoice = Invoice(
                 id: updatedInvoice.id,
                 creator: updatedInvoice.creator,
@@ -277,8 +306,7 @@ struct Invoice {
             );
             invoices.write(invoiceId, newInvoice);
             
-            // Notify escrow contract
-            // In a real implementation, this would call escrow.deposit()
+            // Escrow deposit already called above
             
             // Emit event
             InvoicePaid.emit(
@@ -297,13 +325,52 @@ struct Invoice {
             pedersen_ptr: HashBuiltin*,
             range_check_ptr,
         }(invoiceId: Uint256) -> (success: felt) {
+            let (caller) = get_caller_address();
             let invoice = invoices.read(invoiceId);
+            let ownerAddr = owner.read();
+            
+            // Only owner or invoice creator can mark as expired
+            let isOwner = caller = ownerAddr;
+            let isCreator = caller = invoice.creator;
+            let isValidCaller = isOwner + isCreator;
+            assert isValidCaller = 1;
             
             // Only allow for pending invoices
             assert invoice.status = InvoiceStatus.PENDING;
             
+            // Check if actually expired
+            let (currentTimestamp) = get_block_timestamp();
+            let (isExpired) = uint256_le(invoice.expiryTimestamp, currentTimestamp);
+            assert isExpired = 1;
+            
             // Update status to expired
             _updateInvoiceStatus(invoiceId, InvoiceStatus.EXPIRED);
+            
+            return (1);
+        }
+        
+        @external
+        func releaseEscrow{
+            syscall_ptr: felt*,
+            pedersen_ptr: HashBuiltin*,
+            range_check_ptr,
+        }(invoiceId: Uint256) -> (success: felt) {
+            let (caller) = get_caller_address();
+            let invoice = invoices.read(invoiceId);
+            
+            // Only invoice creator can release escrow
+            assert caller = invoice.creator;
+            
+            // Must be a paid invoice with escrow
+            assert invoice.status = InvoiceStatus.PAID;
+            assert invoice.escrowEnabled = 1;
+            
+            // Call escrow release
+            let escrowAddr = escrowContract.read();
+            IEscrow.release{contract_address: escrowAddr}(invoiceId);
+            
+            // Update invoice status
+            _updateInvoiceStatus(invoiceId, InvoiceStatus.RELEASED);
             
             return (1);
         }

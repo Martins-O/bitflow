@@ -1,4 +1,5 @@
 const axios = require('axios');
+const contractService = require('../backend/src/services/contractService');
 
 // Configuration
 const API_BASE = process.env.API_URL || 'http://localhost:3000/api';
@@ -13,6 +14,10 @@ class PaymentDemo {
     console.log('=====================================\n');
 
     try {
+      // Initialize contract service
+      console.log('🔧 Initializing contracts...');
+      await contractService.initialize();
+      console.log('✅ Contracts initialized\n');
       // Step 1: Create invoices
       console.log('📝 Step 1: Creating Invoices');
       console.log('----------------------------');
@@ -93,6 +98,10 @@ class PaymentDemo {
 
   async createInvoice(amount, description, escrowEnabled, expiryTimestamp) {
     try {
+      // Get next invoice ID before creating
+      const nextIdResponse = await contractService.getNextInvoiceId();
+      const expectedInvoiceId = nextIdResponse;
+
       const response = await axios.post(`${API_BASE}/invoices/create`, {
         amount,
         description,
@@ -100,7 +109,7 @@ class PaymentDemo {
         expiryTimestamp
       });
 
-      const invoiceId = this.extractInvoiceIdFromTx(response.data.transactionHash);
+      const invoiceId = this.extractInvoiceIdFromTx(response.data.transactionHash, expectedInvoiceId);
       
       console.log(`📄 Invoice created: ${description}`);
       console.log(`   Amount: ${amount} BTC`);
@@ -172,10 +181,23 @@ class PaymentDemo {
     }
   }
 
-  extractInvoiceIdFromTx(txHash) {
-    // In a real implementation, you would get the invoice ID from the transaction receipt
-    // For demo purposes, generating a sequential ID
-    return Math.floor(Math.random() * 1000) + 1;
+async extractInvoiceIdFromTx(txHash, expectedInvoiceId = null) {
+    try {
+      // In a real implementation, you would parse transaction events to get the invoice ID
+      // For now, we'll use the expected invoice ID that we calculated before creating
+      if (expectedInvoiceId) {
+        return expectedInvoiceId.toString();
+      }
+      
+      // Fallback: get the next invoice ID and subtract 1 (since it was incremented)
+      const nextId = await contractService.getNextInvoiceId();
+      const currentId = (BigInt(nextId) - BigInt(1)).toString();
+      
+      return currentId;
+    } catch (error) {
+      console.error('Failed to extract invoice ID from transaction:', error.message);
+      throw new Error('Could not determine invoice ID');
+    }
   }
 }
 

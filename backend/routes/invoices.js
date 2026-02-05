@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const contractService = require('../services/contractService');
+const contractService = require('../src/services/contractService');
 
 // Create invoice
 router.post('/create', async (req, res) => {
@@ -90,6 +90,48 @@ router.post('/release', async (req, res) => {
     console.error('Release escrow error:', error);
     res.status(500).json({
       error: 'Failed to release escrow',
+      details: error.message
+    });
+  }
+});
+
+// Get invoices (list/filter)
+router.get('/', async (req, res) => {
+  try {
+    const filter = {};
+    
+    // Parse query parameters for filtering
+    if (req.query.address) {
+      filter.address = req.query.address;
+    }
+    if (req.query.type) {
+      filter.type = req.query.type;
+    }
+    if (req.query.limit) {
+      filter.limit = parseInt(req.query.limit);
+    }
+    if (req.query.offset) {
+      filter.offset = parseInt(req.query.offset);
+    }
+
+    const invoices = await contractService.getInvoices(filter);
+
+    // Process invoices for response
+    const processedInvoices = invoices.map(invoice => ({
+      ...invoice,
+      amountInBTC: (starknet.uint256ToBN(invoice.amount.low, invoice.amount.high).toString() / 1e18).toString(),
+      statusText: getStatusText(invoice.status)
+    }));
+
+    res.json({
+      success: true,
+      invoices: processedInvoices,
+      total: processedInvoices.length
+    });
+  } catch (error) {
+    console.error('Get invoices error:', error);
+    res.status(500).json({
+      error: 'Failed to get invoices',
       details: error.message
     });
   }

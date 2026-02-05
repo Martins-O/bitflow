@@ -44,6 +44,7 @@ from starkware.starknet.common.syscalls import get_contract_address, get_caller_
             totalSupply: Uint256,
             balances: LegacyMap<felt, Uint256>,
             allowances: LegacyMap<felt, LegacyMap<felt, Uint256>>,
+            owner: felt,
         }
         
         // Constructor
@@ -62,6 +63,7 @@ from starkware.starknet.common.syscalls import get_contract_address, get_caller_
             name.write(name_);
             symbol.write(symbol_);
             decimals.write(decimals_);
+            owner.write(initialOwner);
             totalSupply.write(initialSupply);
             balances.write(initialOwner, initialSupply);
             
@@ -129,6 +131,15 @@ from starkware.starknet.common.syscalls import get_contract_address, get_caller_
             return (allowances.read(owner).read(spender));
         }
         
+        @view
+        func getOwner{
+            syscall_ptr: felt*,
+            pedersen_ptr: HashBuiltin*,
+            range_check_ptr,
+        }() -> (address: felt) {
+            return (owner.read());
+        }
+        
         // External Functions
         @external
         func transfer{
@@ -185,10 +196,10 @@ from starkware.starknet.common.syscalls import get_contract_address, get_caller_
             range_check_ptr,
         }(to: felt, amount: Uint256) -> (success: felt) {
             let (caller) = get_caller_address();
-            let (contractAddr) = get_contract_address();
+            let ownerAddr = owner.read();
             
             // Only contract owner can mint
-            assert caller = contractAddr;
+            assert caller = ownerAddr;
             
             let (currentSupply) = totalSupply.read();
             let newSupply = uint256_add(currentSupply, amount);

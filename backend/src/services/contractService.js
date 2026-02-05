@@ -1,4 +1,4 @@
-const { starknet } = require('starknet');
+const starknet = require('starknet');
 
 class ContractService {
   constructor() {
@@ -38,7 +38,7 @@ class ContractService {
         this.wbtcToken = new starknet.Contract(
           wbtcABI,
           process.env.WBTC_TOKEN_ADDRESS,
-          this.provider
+          this.account || this.provider
         );
       }
 
@@ -46,7 +46,7 @@ class ContractService {
         this.invoiceRegistry = new starknet.Contract(
           invoiceRegistryABI,
           process.env.INVOICE_REGISTRY_ADDRESS,
-          this.provider
+          this.account || this.provider
         );
       }
 
@@ -54,7 +54,7 @@ class ContractService {
         this.escrowContract = new starknet.Contract(
           escrowABI,
           process.env.ESCROW_CONTRACT_ADDRESS,
-          this.provider
+          this.account || this.provider
         );
       }
 
@@ -63,6 +63,27 @@ class ContractService {
       console.error('Contract initialization failed:', error);
       throw error;
     }
+  }
+
+  // Helper method to wait for transaction confirmation
+  async waitForTransaction(txHash, maxWaitTime = 60000) {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        const receipt = await this.provider.getTransactionReceipt(txHash);
+        if (receipt.status === 'ACCEPTED_ON_L2' || receipt.status === 'ACCEPTED_ON_L1') {
+          return receipt;
+        }
+      } catch (error) {
+        // Transaction might not be processed yet
+      }
+      
+      // Wait 2 seconds before checking again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    throw new Error(`Transaction ${txHash} not confirmed within ${maxWaitTime}ms`);
   }
 
   async createInvoice(amount, description, escrowEnabled, expiryTimestamp) {
@@ -85,8 +106,12 @@ class ContractService {
         ]
       );
 
+      // Wait for transaction confirmation
+      const receipt = await this.waitForTransaction(tx.transaction_hash);
+
       return {
         transactionHash: tx.transaction_hash,
+        blockNumber: receipt.block_number,
         success: true
       };
     } catch (error) {
@@ -124,8 +149,12 @@ class ContractService {
         [invoiceIdBN.low, invoiceIdBN.high]
       );
 
+      // Wait for transaction confirmation
+      const receipt = await this.waitForTransaction(payTx.transaction_hash);
+
       return {
         transactionHash: payTx.transaction_hash,
+        blockNumber: receipt.block_number,
         success: true
       };
     } catch (error) {
@@ -134,20 +163,24 @@ class ContractService {
   }
 
   async releaseEscrow(invoiceId) {
-    if (!this.escrowContract) {
-      throw new Error('Escrow contract not initialized');
+    if (!this.invoiceRegistry) {
+      throw new Error('InvoiceRegistry contract not initialized');
     }
 
     try {
       const invoiceIdBN = starknet.bnToUint256(BigInt(invoiceId));
       
-      const tx = await this.escrowContract.invoke(
-        'release',
+      const tx = await this.invoiceRegistry.invoke(
+        'releaseEscrow',
         [invoiceIdBN.low, invoiceIdBN.high]
       );
 
+      // Wait for transaction confirmation
+      const receipt = await this.waitForTransaction(tx.transaction_hash);
+
       return {
         transactionHash: tx.transaction_hash,
+        blockNumber: receipt.block_number,
         success: true
       };
     } catch (error) {
@@ -201,14 +234,101 @@ class ContractService {
     }
   }
 
-  // Simplified ABI definitions (in production, load from compiled contracts)
+  async getInvoices(filter = {}) {
+    if (!this.invoiceRegistry) {
+      throw new Error('InvoiceRegistry contract not initialized');
+    }
+
+    try {
+      const nextIdResult = await this.invoiceRegistry.call('getNextInvoiceId');
+      const nextId = starknet.uint256ToBN(nextIdResult.id.low, nextIdResult.id.high).toNumber();
+      const invoices = [];
+
+      // Get all invoices up to current ID (in production, implement pagination)
+      for (let i = 1; i < nextId; i++) {
+        try {
+          const invoice = await this.getInvoice(i);
+          if (invoice) {
+            // Apply filters
+            if (filter.address && invoice.creator !== filter.address) {
+              if (filter.type === 'created' || invoice.creator !== filter.address) continue;
+            }
+            if (filter.type === 'created' && invoice.creator !== filter.address) continue;
+            if (filter.type === 'paid' && invoice.status !== 1) continue; // PAID = 1
+            
+            invoices.push(invoice);
+          }
+        } catch (error) {
+          // Skip invalid invoices
+        }
+      }
+
+      return invoices;
+    } catch (error) {
+      throw new Error(`Failed to get invoices: ${error.message}`);
+    }
+  }
+
+  async getNextInvoiceId() {
+    if (!this.invoiceRegistry) {
+      throw new Error('InvoiceRegistry contract not initialized');
+    }
+
+    try {
+      const result = await this.invoiceRegistry.call('getNextInvoiceId');
+      const nextId = starknet.uint256ToBN(result.id.low, result.id.high);
+      return nextId.toString();
+    } catch (error) {
+      throw new Error(`Failed to get next invoice ID: ${error.message}`);
+    }
+  }
+
+  // Complete WrappedBTC ABI
   getWrappedBTCABI() {
     return [
+      {
+        "type": "function",
+        "name": "name",
+        "inputs": [],
+        "outputs": [{"name": "res", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "symbol",
+        "inputs": [],
+        "outputs": [{"name": "res", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "decimals",
+        "inputs": [],
+        "outputs": [{"name": "res", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "totalSupply",
+        "inputs": [],
+        "outputs": [{"name": "res", "type": "Uint256"}],
+        "stateMutability": "view"
+      },
       {
         "type": "function",
         "name": "balanceOf",
         "inputs": [{"name": "account", "type": "felt"}],
         "outputs": [{"name": "balance", "type": "Uint256"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "allowance",
+        "inputs": [
+          {"name": "owner", "type": "felt"},
+          {"name": "spender", "type": "felt"}
+        ],
+        "outputs": [{"name": "res", "type": "Uint256"}],
         "stateMutability": "view"
       },
       {
@@ -230,6 +350,34 @@ class ContractService {
         ],
         "outputs": [{"name": "success", "type": "felt"}],
         "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "transferFrom",
+        "inputs": [
+          {"name": "sender", "type": "felt"},
+          {"name": "recipient", "type": "felt"},
+          {"name": "amount", "type": "Uint256"}
+        ],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "mint",
+        "inputs": [
+          {"name": "to", "type": "felt"},
+          {"name": "amount", "type": "Uint256"}
+        ],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "getOwner",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
       }
     ];
   }
@@ -257,6 +405,34 @@ class ContractService {
       },
       {
         "type": "function",
+        "name": "getNextInvoiceId",
+        "inputs": [],
+        "outputs": [{"name": "id", "type": "Uint256"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getWBTCAddress",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getEscrowAddress",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getOwner",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
         "name": "payInvoice",
         "inputs": [{"name": "invoiceId", "type": "Uint256"}],
         "outputs": [{"name": "success", "type": "felt"}],
@@ -265,6 +441,20 @@ class ContractService {
       {
         "type": "function",
         "name": "payInvoiceWithEscrow",
+        "inputs": [{"name": "invoiceId", "type": "Uint256"}],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "markInvoiceExpired",
+        "inputs": [{"name": "invoiceId", "type": "Uint256"}],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "releaseEscrow",
         "inputs": [{"name": "invoiceId", "type": "Uint256"}],
         "outputs": [{"name": "success", "type": "felt"}],
         "stateMutability": "external"
@@ -295,9 +485,58 @@ class ContractService {
       },
       {
         "type": "function",
+        "name": "refundAfterExpiry",
+        "inputs": [
+          {"name": "invoiceId", "type": "Uint256"},
+          {"name": "refundee", "type": "felt"},
+          {"name": "reason", "type": "felt"}
+        ],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "emergencyWithdraw",
+        "inputs": [
+          {"name": "invoiceId", "type": "Uint256"},
+          {"name": "recipient", "type": "felt"}
+        ],
+        "outputs": [{"name": "success", "type": "felt"}],
+        "stateMutability": "external"
+      },
+      {
+        "type": "function",
         "name": "getEscrow",
         "inputs": [{"name": "invoiceId", "type": "Uint256"}],
         "outputs": [{"name": "escrow", "type": "EscrowEntry"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getWBTCAddress",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getInvoiceRegistryAddress",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getTotalEscrowed",
+        "inputs": [],
+        "outputs": [{"name": "amount", "type": "Uint256"}],
+        "stateMutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "getOwner",
+        "inputs": [],
+        "outputs": [{"name": "address", "type": "felt"}],
         "stateMutability": "view"
       }
     ];
