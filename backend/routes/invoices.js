@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { uint256 } = require('starknet');
 const contractService = require('../src/services/contractService');
 
 // Create invoice
@@ -14,7 +15,7 @@ router.post('/create', async (req, res) => {
       });
     }
 
-    if (amount <= 0) {
+    if (typeof amount !== 'number' || amount <= 0) {
       return res.status(400).json({
         error: 'Amount must be greater than 0'
       });
@@ -99,8 +100,7 @@ router.post('/release', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const filter = {};
-    
-    // Parse query parameters for filtering
+
     if (req.query.address) {
       filter.address = req.query.address;
     }
@@ -108,20 +108,22 @@ router.get('/', async (req, res) => {
       filter.type = req.query.type;
     }
     if (req.query.limit) {
-      filter.limit = parseInt(req.query.limit);
+      filter.limit = parseInt(req.query.limit, 10);
     }
     if (req.query.offset) {
-      filter.offset = parseInt(req.query.offset);
+      filter.offset = parseInt(req.query.offset, 10);
     }
 
     const invoices = await contractService.getInvoices(filter);
 
-    // Process invoices for response
-    const processedInvoices = invoices.map(invoice => ({
-      ...invoice,
-      amountInBTC: (starknet.uint256ToBN(invoice.amount.low, invoice.amount.high).toString() / 1e18).toString(),
-      statusText: getStatusText(invoice.status)
-    }));
+    const processedInvoices = invoices.map(invoice => {
+      const amountBN = uint256.uint256ToBN({ low: invoice.amount.low, high: invoice.amount.high });
+      return {
+        ...invoice,
+        amountInBTC: contractService.weiToAmount(amountBN),
+        statusText: getStatusText(invoice.status)
+      };
+    });
 
     res.json({
       success: true,
@@ -132,6 +134,34 @@ router.get('/', async (req, res) => {
     console.error('Get invoices error:', error);
     res.status(500).json({
       error: 'Failed to get invoices',
+      details: error.message
+    });
+  }
+});
+
+// Get account balance — must be defined BEFORE /:id to avoid "balance" matching as an id
+router.get('/balance/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+
+    if (!address) {
+      return res.status(400).json({
+        error: 'Address is required'
+      });
+    }
+
+    const balance = await contractService.getBalance(address);
+    const balanceInBTC = contractService.weiToAmount(BigInt(balance));
+
+    res.json({
+      success: true,
+      balance,
+      balanceInBTC
+    });
+  } catch (error) {
+    console.error('Get balance error:', error);
+    res.status(500).json({
+      error: 'Failed to get balance',
       details: error.message
     });
   }
@@ -156,14 +186,14 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    // Convert amount from wei-like units to regular units
-    const amountInBTC = starknet.uint256ToBN(invoice.amount.low, invoice.amount.high).toString() / 1e18;
+    const amountBN = uint256.uint256ToBN({ low: invoice.amount.low, high: invoice.amount.high });
+    const amountInBTC = contractService.weiToAmount(amountBN);
 
     res.json({
       success: true,
       invoice: {
         ...invoice,
-        amountInBTC: amountInBTC.toString(),
+        amountInBTC,
         statusText: getStatusText(invoice.status)
       }
     });
@@ -176,36 +206,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Get account balance
-router.get('/balance/:address', async (req, res) => {
-  try {
-    const { address } = req.params;
-
-    if (!address) {
-      return res.status(400).json({
-        error: 'Address is required'
-      });
-    }
-
-    const balance = await contractService.getBalance(address);
-    const balanceInBTC = balance / 1e18;
-
-    res.json({
-      success: true,
-      balance: balance,
-      balanceInBTC: balanceInBTC.toString()
-    });
-  } catch (error) {
-    console.error('Get balance error:', error);
-    res.status(500).json({
-      error: 'Failed to get balance',
-      details: error.message
-    });
-  }
-});
-
 // Helper function to convert status number to text
-function getStatusText(status) {
+function getStatusText (status) {
   const statusMap = {
     0: 'Pending',
     1: 'Paid',

@@ -12,8 +12,7 @@ module.exports = {
     sourceType: 'module'
   },
   rules: {
-    // Custom rules for BitFlow project
-    'no-console': 'warn', // Allow console in non-production code
+    'no-console': 'warn',
     'prefer-const': 'error',
     'no-var': 'error',
     'object-shorthand': 'error',
@@ -27,30 +26,21 @@ module.exports = {
     'max-len': ['warn', { code: 120 }],
     'no-trailing-spaces': 'error',
     'eol-last': 'error',
-    
-    // Node.js specific rules
-    'node/no-unsupported-features/es-syntax': 'off',
-    'node/no-missing-import': 'error',
-    'node/no-extraneous-import': 'error',
-    
-    // Test-specific rules
-    'jest/expect-expect': 'error',
-    'jest/no-disabled-tests': 'warn',
-    'jest/no-focused-tests': 'error',
-    'jest/prefer-to-have-length': 'warn',
-    'jest/valid-expect': 'error',
-    
+
+    // Node.js specific rules (eslint-plugin-n)
+    'n/no-unsupported-features/es-syntax': 'off',
+
     // Security rules
     'no-eval': 'error',
     'no-implied-eval': 'error',
     'no-new-func': 'error',
     'no-script-url': 'error',
-    
+
     // Async/await rules
     'require-await': 'error',
     'no-return-await': 'error',
     'no-promise-executor-return': 'error',
-    
+
     // Error handling
     'prefer-promise-reject-errors': 'error',
     'no-async-promise-executor': 'error'
@@ -59,24 +49,14 @@ module.exports = {
     {
       files: ['tests/**/*.js'],
       rules: {
-        'no-console': 'off', // Allow console in tests
-        'max-len': 'off', // Allow longer lines in tests
-        'node/no-missing-require': 'off' // Allow test-only requires
+        'no-console': 'off',
+        'max-len': 'off'
       }
     },
     {
       files: ['scripts/**/*.js'],
       rules: {
-        'no-console': 'off', // Allow console in CLI scripts
-        'no-process-exit': 'off' // Allow process.exit in CLI scripts
-      }
-    },
-    {
-      files: ['contracts/**/*.cairo'],
-      parser: 'cairo-parser',
-      rules: {
-        'cairo/func-casing': 'error',
-        'cairo/variable-naming': 'error'
+        'no-console': 'off'
       }
     }
   ],
