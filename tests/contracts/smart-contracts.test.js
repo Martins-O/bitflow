@@ -6,7 +6,7 @@ describe('Smart Contract Tests', () => {
     let mockAccount;
 
     beforeEach(() => {
-      const { starknet } = require('starknet');
+      const starknet = require('starknet');
       
       mockContract = {
         call: jest.fn(),
@@ -201,7 +201,7 @@ describe('Smart Contract Tests', () => {
     let mockContract;
 
     beforeEach(() => {
-      const { starknet } = require('starknet');
+      const starknet = require('starknet');
       
       mockContract = {
         call: jest.fn(),
@@ -351,7 +351,7 @@ describe('Smart Contract Tests', () => {
     let mockContract;
 
     beforeEach(() => {
-      const { starknet } = require('starknet');
+      const starknet = require('starknet');
       
       mockContract = {
         call: jest.fn(),
@@ -497,7 +497,7 @@ describe('Smart Contract Tests', () => {
 
   describe('Contract Integration', () => {
     test('should handle contract address retrieval', async () => {
-      const { starknet } = require('starknet');
+      const starknet = require('starknet');
       const mockWBTC = { address: testUtils.randomAddress() };
       const mockInvoiceRegistry = { address: testUtils.randomAddress() };
       const mockEscrow = { address: testUtils.randomAddress() };

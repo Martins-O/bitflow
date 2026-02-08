@@ -29,4 +29,5 @@ coverage/
 
 # Temporary files
 tmp/
-temp/
+temp/.jest-cache/
+.jest-cache/
