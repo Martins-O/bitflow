@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Header } from '@/components/Header'
+import { Footer } from '@/components/Footer'
 import { Notification } from '@/components/Notification'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { useWallet } from '@/hooks/useWallet'
@@ -102,9 +103,7 @@ export function RootLayout() {
         <Outlet context={{ ...context, refreshKey }} />
       </main>
 
-      <footer className="text-center text-gray-500 py-8 text-sm border-t border-white/5">
-        <p>Built for the Starknet ecosystem</p>
-      </footer>
+      <Footer />
 
       <Notification notification={notification} onClose={hideNotification} />
       <LoadingOverlay visible={globalLoading} />
