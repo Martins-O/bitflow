@@ -5,12 +5,14 @@
 use starknet::ContractAddress;
 
 // Invoice Status Constants
-mod InvoiceStatus {
-    const PENDING: felt252 = 0;
-    const PAID: felt252 = 1;
-    const RELEASED: felt252 = 2;
-    const EXPIRED: felt252 = 3;
-}
+// Invoice Status Constants
+// mod InvoiceStatus {
+//     const PENDING: felt252 = 0;
+//     const PAID: felt252 = 1;
+//     const RELEASED: felt252 = 2;
+//     const EXPIRED: felt252 = 3;
+//     const RESOLVED: felt252 = 4;
+// }
 
 #[starknet::interface]
 trait IInvoiceRegistry<TContractState> {
@@ -27,12 +29,14 @@ trait IInvoiceRegistry<TContractState> {
         amount: u256,
         description: felt252,
         escrow_enabled: bool,
-        expiry_timestamp: u64
+        expiry_timestamp: u64,
     ) -> u256;
     fn pay_invoice(ref self: TContractState, invoice_id: u256) -> bool;
     fn pay_invoice_with_escrow(ref self: TContractState, invoice_id: u256) -> bool;
     fn mark_invoice_expired(ref self: TContractState, invoice_id: u256) -> bool;
     fn release_escrow(ref self: TContractState, invoice_id: u256) -> bool;
+    fn dispute_invoice(ref self: TContractState, invoice_id: u256) -> bool;
+    fn resolve_dispute(ref self: TContractState, invoice_id: u256, winner: ContractAddress) -> bool;
 }
 
 // ERC20 Interface for token transfers
@@ -40,10 +44,7 @@ trait IInvoiceRegistry<TContractState> {
 trait IERC20<TContractState> {
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
     fn transfer_from(
-        ref self: TContractState,
-        sender: ContractAddress,
-        recipient: ContractAddress,
-        amount: u256
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
     ) -> bool;
 }
 
@@ -55,9 +56,11 @@ trait IEscrow<TContractState> {
         invoice_id: u256,
         payer: ContractAddress,
         amount: u256,
-        invoice_creator: ContractAddress
+        invoice_creator: ContractAddress,
     ) -> bool;
     fn release(ref self: TContractState, invoice_id: u256) -> bool;
+    fn toggle_dispute(ref self: TContractState, invoice_id: u256) -> bool;
+    fn arbitrate(ref self: TContractState, invoice_id: u256, recipient: ContractAddress) -> bool;
 }
 
 // Invoice struct - must be defined outside the contract module for interface
@@ -72,15 +75,29 @@ struct Invoice {
     status: felt252,
     created_at: u64,
     paid_at: u64,
+    payer: ContractAddress,
+    is_disputed: bool,
 }
 
 #[starknet::contract]
+#[starknet::contract]
 mod InvoiceRegistry {
-    use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
-    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use core::num::traits::Zero;
-    use super::{Invoice, InvoiceStatus, IERC20Dispatcher, IERC20DispatcherTrait};
-    use super::{IEscrowDispatcher, IEscrowDispatcherTrait};
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
+    use super::{
+        IERC20Dispatcher, IERC20DispatcherTrait, IEscrowDispatcher, IEscrowDispatcherTrait, Invoice,
+    };
+
+    // Define Status constants locally
+    const STATUS_PENDING: felt252 = 0;
+    const STATUS_PAID: felt252 = 1;
+    const STATUS_RELEASED: felt252 = 2;
+    const STATUS_EXPIRED: felt252 = 3;
+    const STATUS_RESOLVED: felt252 = 4;
 
     // Storage
     #[storage]
@@ -181,7 +198,7 @@ mod InvoiceRegistry {
             amount: u256,
             description: felt252,
             escrow_enabled: bool,
-            expiry_timestamp: u64
+            expiry_timestamp: u64,
         ) -> u256 {
             let creator = get_caller_address();
 
@@ -205,23 +222,28 @@ mod InvoiceRegistry {
                 description,
                 escrow_enabled,
                 expiry_timestamp,
-                status: InvoiceStatus::PENDING,
+                status: STATUS_PENDING,
                 created_at: current_timestamp,
                 paid_at: 0_u64,
+                payer: Zero::zero(),
+                is_disputed: false,
             };
 
             // Store invoice
             self.invoices.write(invoice_id, invoice);
 
             // Emit event
-            self.emit(InvoiceCreated {
-                id: invoice_id,
-                creator,
-                amount,
-                description,
-                escrow_enabled,
-                expiry_timestamp,
-            });
+            self
+                .emit(
+                    InvoiceCreated {
+                        id: invoice_id,
+                        creator,
+                        amount,
+                        description,
+                        escrow_enabled,
+                        expiry_timestamp,
+                    },
+                );
 
             invoice_id
         }
@@ -237,7 +259,7 @@ mod InvoiceRegistry {
             assert(!invoice.creator.is_zero(), 'Invoice does not exist');
 
             // Validate invoice status
-            assert(invoice.status == InvoiceStatus::PENDING, 'Invoice not pending');
+            assert(invoice.status == STATUS_PENDING, 'Invoice not pending');
 
             // Check expiry
             let current_timestamp = get_block_timestamp();
@@ -248,16 +270,17 @@ mod InvoiceRegistry {
             wbtc.transfer_from(payer, invoice.creator, invoice.amount);
 
             // Update invoice status and paid timestamp
-            self._update_invoice_status(invoice_id, InvoiceStatus::PAID);
+            self._update_invoice_status(invoice_id, STATUS_PAID);
             self._update_paid_timestamp(invoice_id, current_timestamp);
+            self._update_payer(invoice_id, payer);
 
             // Emit event
-            self.emit(InvoicePaid {
-                id: invoice_id,
-                payer,
-                amount: invoice.amount,
-                escrow_enabled: false,
-            });
+            self
+                .emit(
+                    InvoicePaid {
+                        id: invoice_id, payer, amount: invoice.amount, escrow_enabled: false,
+                    },
+                );
 
             // Release reentrancy lock
             self._unlock();
@@ -275,7 +298,7 @@ mod InvoiceRegistry {
             assert(!invoice.creator.is_zero(), 'Invoice does not exist');
 
             // Validate invoice
-            assert(invoice.status == InvoiceStatus::PENDING, 'Invoice not pending');
+            assert(invoice.status == STATUS_PENDING, 'Invoice not pending');
             assert(invoice.escrow_enabled, 'Escrow not enabled');
 
             // Check expiry
@@ -287,16 +310,17 @@ mod InvoiceRegistry {
             escrow.deposit(invoice_id, payer, invoice.amount, invoice.creator);
 
             // Update invoice status and paid timestamp
-            self._update_invoice_status(invoice_id, InvoiceStatus::PAID);
+            self._update_invoice_status(invoice_id, STATUS_PAID);
             self._update_paid_timestamp(invoice_id, current_timestamp);
+            self._update_payer(invoice_id, payer);
 
             // Emit event
-            self.emit(InvoicePaid {
-                id: invoice_id,
-                payer,
-                amount: invoice.amount,
-                escrow_enabled: true,
-            });
+            self
+                .emit(
+                    InvoicePaid {
+                        id: invoice_id, payer, amount: invoice.amount, escrow_enabled: true,
+                    },
+                );
 
             // Release reentrancy lock
             self._unlock();
@@ -318,14 +342,14 @@ mod InvoiceRegistry {
             assert(is_owner || is_creator, 'Not authorized');
 
             // Only allow for pending invoices
-            assert(invoice.status == InvoiceStatus::PENDING, 'Invoice not pending');
+            assert(invoice.status == STATUS_PENDING, 'Invoice not pending');
 
             // Check if actually expired
             let current_timestamp = get_block_timestamp();
             assert(current_timestamp >= invoice.expiry_timestamp, 'Invoice not yet expired');
 
             // Update status to expired
-            self._update_invoice_status(invoice_id, InvoiceStatus::EXPIRED);
+            self._update_invoice_status(invoice_id, STATUS_EXPIRED);
 
             true
         }
@@ -340,11 +364,12 @@ mod InvoiceRegistry {
             // Validate invoice exists
             assert(!invoice.creator.is_zero(), 'Invoice does not exist');
 
-            // Only invoice creator can release escrow
-            assert(caller == invoice.creator, 'Only creator can release');
+            // Only payer can release escrow (Buyer Confirmation)
+            assert(caller == invoice.payer, 'Only payer can release');
+            assert(!invoice.is_disputed, 'Invoice is disputed');
 
             // Must be a paid invoice with escrow
-            assert(invoice.status == InvoiceStatus::PAID, 'Invoice not paid');
+            assert(invoice.status == STATUS_PAID, 'Invoice not paid');
             assert(invoice.escrow_enabled, 'Escrow not enabled');
 
             // Call escrow release
@@ -352,9 +377,60 @@ mod InvoiceRegistry {
             escrow.release(invoice_id);
 
             // Update invoice status
-            self._update_invoice_status(invoice_id, InvoiceStatus::RELEASED);
+            self._update_invoice_status(invoice_id, STATUS_RELEASED);
 
             // Release reentrancy lock
+            self._unlock();
+            true
+        }
+
+        fn dispute_invoice(ref self: ContractState, invoice_id: u256) -> bool {
+            let caller = get_caller_address();
+            let mut invoice = self.invoices.read(invoice_id);
+
+            // Validate invoice exists
+            assert(!invoice.creator.is_zero(), 'Invoice does not exist');
+            assert(invoice.escrow_enabled, 'Escrow not enabled');
+            assert(invoice.status == STATUS_PAID, 'Invoice not paid');
+
+            // Only payer or creator can dispute
+            let is_payer = caller == invoice.payer;
+            let is_creator = caller == invoice.creator;
+            assert(is_payer || is_creator, 'Not authorized to dispute');
+
+            // Toggle dispute in escrow
+            let escrow = IEscrowDispatcher { contract_address: self.escrow_contract.read() };
+            escrow.toggle_dispute(invoice_id);
+
+            // Toggle local state
+            invoice.is_disputed = !invoice.is_disputed;
+            self.invoices.write(invoice_id, invoice);
+
+            true
+        }
+
+        fn resolve_dispute(
+            ref self: ContractState, invoice_id: u256, winner: ContractAddress,
+        ) -> bool {
+            // Reentrancy guard
+            self._lock();
+
+            let caller = get_caller_address();
+            let owner = self.owner.read();
+
+            // Only owner can resolve
+            assert(caller == owner, 'Only owner can resolve');
+
+            let invoice = self.invoices.read(invoice_id);
+            assert(invoice.is_disputed, 'Invoice not disputed');
+
+            // Call escrow arbitrate
+            let escrow = IEscrowDispatcher { contract_address: self.escrow_contract.read() };
+            escrow.arbitrate(invoice_id, winner);
+
+            // Update status
+            self._update_invoice_status(invoice_id, STATUS_RESOLVED);
+
             self._unlock();
             true
         }
@@ -387,16 +463,14 @@ mod InvoiceRegistry {
                 status: new_status,
                 created_at: invoice.created_at,
                 paid_at: invoice.paid_at,
+                payer: invoice.payer,
+                is_disputed: invoice.is_disputed,
             };
 
             self.invoices.write(invoice_id, updated_invoice);
 
             // Emit status update event
-            self.emit(InvoiceStatusUpdated {
-                id: invoice_id,
-                old_status,
-                new_status,
-            });
+            self.emit(InvoiceStatusUpdated { id: invoice_id, old_status, new_status });
         }
 
         fn _update_paid_timestamp(ref self: ContractState, invoice_id: u256, timestamp: u64) {
@@ -412,6 +486,28 @@ mod InvoiceRegistry {
                 status: invoice.status,
                 created_at: invoice.created_at,
                 paid_at: timestamp,
+                payer: invoice.payer,
+                is_disputed: invoice.is_disputed,
+            };
+
+            self.invoices.write(invoice_id, updated_invoice);
+        }
+
+        fn _update_payer(ref self: ContractState, invoice_id: u256, payer: ContractAddress) {
+            let invoice = self.invoices.read(invoice_id);
+
+            let updated_invoice = Invoice {
+                id: invoice.id,
+                creator: invoice.creator,
+                amount: invoice.amount,
+                description: invoice.description,
+                escrow_enabled: invoice.escrow_enabled,
+                expiry_timestamp: invoice.expiry_timestamp,
+                status: invoice.status,
+                created_at: invoice.created_at,
+                paid_at: invoice.paid_at,
+                payer: payer,
+                is_disputed: invoice.is_disputed,
             };
 
             self.invoices.write(invoice_id, updated_invoice);

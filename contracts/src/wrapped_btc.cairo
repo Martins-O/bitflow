@@ -26,7 +26,7 @@ trait IERC20Mintable<TContractState> {
 #[starknet::contract]
 mod WrappedBTC {
     use starknet::{ContractAddress, get_caller_address};
-    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
+    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess, StorageMapWriteAccess};
     use core::num::traits::Zero;
 
     // Storage

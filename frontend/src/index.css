@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-dark-primary text-gray-100;
+  }
+
+  ::selection {
+    background: rgba(247, 147, 26, 0.3);
+    color: #F9FAFB;
+  }
+}
+
+@layer components {
+  /* Glass card */
+  .glass-card {
+    @apply bg-[#1F2937]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-glass;
+  }
+
+  /* Input fields */
+  .input-field {
+    @apply w-full px-4 py-3 bg-[#111827]/80 border border-white/10 rounded-xl text-gray-100
+           placeholder-gray-500 transition-all duration-200
+           focus:outline-none focus:border-bitcoin-orange focus:ring-2 focus:ring-bitcoin-orange/15;
+  }
+
+  /* Primary button — orange gradient */
+  .btn-primary {
+    @apply px-6 py-3 bg-orange-gradient text-white font-semibold rounded-xl shadow-glow-orange
+           hover:shadow-glow-orange-lg hover:-translate-y-0.5 active:translate-y-0
+           transition-all duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none;
+  }
+
+  /* Success button — green */
+  .btn-success {
+    @apply px-6 py-3 bg-success-gradient text-white font-semibold rounded-xl shadow-glow-green
+           hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none;
+  }
+
+  /* Nav link */
+  .nav-link {
+    @apply text-gray-400 font-medium px-3 py-1.5 rounded-lg transition-all duration-200
+           hover:text-bitcoin-orange hover:bg-white/5 text-sm;
+  }
+}
+
+/* Background grid animation */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0D1A;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid #F7931A;
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print */
+@media print {
+  header, footer, .notification, .loading-overlay {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}
