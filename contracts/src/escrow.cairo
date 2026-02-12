@@ -36,7 +36,9 @@ trait IEscrow<TContractState> {
     ) -> bool;
     fn release(ref self: TContractState, invoice_id: u256) -> bool;
     fn refund_after_expiry(ref self: TContractState, invoice_id: u256) -> bool;
-    fn emergency_withdraw(ref self: TContractState, invoice_id: u256, recipient: ContractAddress) -> bool;
+    fn emergency_withdraw(
+        ref self: TContractState, invoice_id: u256, recipient: ContractAddress,
+    ) -> bool;
     fn toggle_dispute(ref self: TContractState, invoice_id: u256) -> bool;
     fn arbitrate(ref self: TContractState, invoice_id: u256, recipient: ContractAddress) -> bool;
 }
@@ -46,18 +48,18 @@ trait IEscrow<TContractState> {
 trait IERC20<TContractState> {
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
     fn transfer_from(
-        ref self: TContractState,
-        sender: ContractAddress,
-        recipient: ContractAddress,
-        amount: u256,
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
     ) -> bool;
 }
 
 #[starknet::contract]
 mod Escrow {
-    use starknet::{ContractAddress, get_caller_address, get_block_timestamp, get_contract_address};
-    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess, StorageMapWriteAccess};
     use core::num::traits::Zero;
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use super::{EscrowEntry, IERC20Dispatcher, IERC20DispatcherTrait};
 
     #[storage]
@@ -217,12 +219,7 @@ mod Escrow {
             wbtc.transfer_from(payer, this_contract, amount);
 
             // Emit event
-            self.emit(EscrowDeposited {
-                invoice_id,
-                payer,
-                amount,
-                invoice_creator,
-            });
+            self.emit(EscrowDeposited { invoice_id, payer, amount, invoice_creator });
 
             self._unlock();
             true
@@ -255,6 +252,7 @@ mod Escrow {
                 created_at: escrow.created_at,
                 released_at: current_timestamp,
                 is_active: false,
+                is_disputed: false,
             };
             self.escrows.write(invoice_id, updated_escrow);
 
@@ -267,12 +265,15 @@ mod Escrow {
             wbtc.transfer(escrow.invoice_creator, escrow.amount);
 
             // Emit event
-            self.emit(EscrowReleased {
-                invoice_id,
-                recipient: escrow.invoice_creator,
-                amount: escrow.amount,
-                released_by: caller,
-            });
+            self
+                .emit(
+                    EscrowReleased {
+                        invoice_id,
+                        recipient: escrow.invoice_creator,
+                        amount: escrow.amount,
+                        released_by: caller,
+                    },
+                );
 
             self._unlock();
             true
@@ -305,6 +306,7 @@ mod Escrow {
                 created_at: escrow.created_at,
                 released_at: current_timestamp,
                 is_active: false,
+                is_disputed: false,
             };
             self.escrows.write(invoice_id, updated_escrow);
 
@@ -317,20 +319,14 @@ mod Escrow {
             wbtc.transfer(escrow.payer, escrow.amount);
 
             // Emit event
-            self.emit(EscrowRefunded {
-                invoice_id,
-                refundee: escrow.payer,
-                amount: escrow.amount,
-            });
+            self.emit(EscrowRefunded { invoice_id, refundee: escrow.payer, amount: escrow.amount });
 
             self._unlock();
             true
         }
 
         fn emergency_withdraw(
-            ref self: ContractState,
-            invoice_id: u256,
-            recipient: ContractAddress,
+            ref self: ContractState, invoice_id: u256, recipient: ContractAddress,
         ) -> bool {
             // Reentrancy guard
             self._lock();
@@ -358,6 +354,7 @@ mod Escrow {
                 created_at: escrow.created_at,
                 released_at: current_timestamp,
                 is_active: false,
+                is_disputed: false,
             };
             self.escrows.write(invoice_id, updated_escrow);
 
@@ -399,7 +396,9 @@ mod Escrow {
             true
         }
 
-        fn arbitrate(ref self: ContractState, invoice_id: u256, recipient: ContractAddress) -> bool {
+        fn arbitrate(
+            ref self: ContractState, invoice_id: u256, recipient: ContractAddress,
+        ) -> bool {
             // Reentrancy guard
             self._lock();
 
@@ -436,11 +435,7 @@ mod Escrow {
             wbtc.transfer(recipient, escrow.amount);
 
             // Emit event
-            self.emit(EscrowArbitrated {
-                invoice_id,
-                winner: recipient,
-                amount: escrow.amount,
-            });
+            self.emit(EscrowArbitrated { invoice_id, winner: recipient, amount: escrow.amount });
 
             self._unlock();
             true

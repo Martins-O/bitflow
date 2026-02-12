@@ -1,4 +1,4 @@
-export type InvoiceStatus = 'PENDING' | 'PAID' | 'RELEASED' | 'EXPIRED'
+export type InvoiceStatus = 'PENDING' | 'PAID' | 'RELEASED' | 'EXPIRED' | 'RESOLVED'
 
 export interface Invoice {
   id: string
@@ -11,6 +11,7 @@ export interface Invoice {
   createdAt: number
   expiryTimestamp: number
   transactionHash?: string
+  isDisputed?: boolean
 }
 
 export interface CreateInvoiceData {

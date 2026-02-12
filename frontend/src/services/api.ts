@@ -51,6 +51,24 @@ class ApiService {
     return response.data
   }
 
+  async disputeInvoice(invoiceId: string): Promise<{ transactionHash: string }> {
+    const response = await this.client.post('/invoices/dispute', {
+      invoiceId,
+    })
+    return response.data
+  }
+
+  async resolveDispute(
+    invoiceId: string,
+    winner: string,
+  ): Promise<{ transactionHash: string }> {
+    const response = await this.client.post('/invoices/resolve', {
+      invoiceId,
+      winner,
+    })
+    return response.data
+  }
+
   async getInvoice(invoiceId: string): Promise<Invoice> {
     const response = await this.client.get(`/invoices/${invoiceId}`)
     return response.data

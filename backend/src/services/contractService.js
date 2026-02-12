@@ -1,7 +1,7 @@
 const { RpcProvider, Account, Contract, uint256, shortString } = require('starknet');
 
 // Convert a decimal amount string to BigInt wei (avoids floating point errors)
-function amountToWei (amount) {
+function amountToWei(amount) {
   const parts = String(amount).split('.');
   const whole = parts[0] || '0';
   const frac = (parts[1] || '').padEnd(18, '0').slice(0, 18);
@@ -9,7 +9,7 @@ function amountToWei (amount) {
 }
 
 // Convert BigInt wei back to decimal string
-function weiToAmount (wei) {
+function weiToAmount(wei) {
   const str = wei.toString().padStart(19, '0');
   const whole = str.slice(0, str.length - 18) || '0';
   const frac = str.slice(str.length - 18).replace(/0+$/, '');
@@ -17,7 +17,7 @@ function weiToAmount (wei) {
 }
 
 class ContractService {
-  constructor () {
+  constructor() {
     this.provider = null;
     this.account = null;
     this.wbtcToken = null;
@@ -26,7 +26,7 @@ class ContractService {
     this.initialized = false;
   }
 
-  initialize () {
+  initialize() {
     if (this.initialized) return;
 
     try {
@@ -77,7 +77,7 @@ class ContractService {
     }
   }
 
-  async waitForTransaction (txHash, maxWaitTime = 60000) {
+  async waitForTransaction(txHash, maxWaitTime = 60000) {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
@@ -85,10 +85,10 @@ class ContractService {
         const receipt = await this.provider.getTransactionReceipt(txHash);
         // starknet.js v5+: check execution_status / finality_status
         if (receipt.execution_status === 'SUCCEEDED' ||
-            receipt.finality_status === 'ACCEPTED_ON_L2' ||
-            receipt.finality_status === 'ACCEPTED_ON_L1' ||
-            receipt.status === 'ACCEPTED_ON_L2' ||
-            receipt.status === 'ACCEPTED_ON_L1') {
+          receipt.finality_status === 'ACCEPTED_ON_L2' ||
+          receipt.finality_status === 'ACCEPTED_ON_L1' ||
+          receipt.status === 'ACCEPTED_ON_L2' ||
+          receipt.status === 'ACCEPTED_ON_L1') {
           return receipt;
         }
         if (receipt.execution_status === 'REVERTED') {
@@ -105,7 +105,7 @@ class ContractService {
     throw new Error(`Transaction ${txHash} not confirmed within ${maxWaitTime}ms`);
   }
 
-  async createInvoice (amount, description, escrowEnabled, expiryTimestamp) {
+  async createInvoice(amount, description, escrowEnabled, expiryTimestamp) {
     if (!this.invoiceRegistry) {
       throw new Error('InvoiceRegistry contract not initialized');
     }
@@ -142,7 +142,7 @@ class ContractService {
     }
   }
 
-  async payInvoice (invoiceId, useEscrow = false) {
+  async payInvoice(invoiceId, useEscrow = false) {
     if (!this.invoiceRegistry || !this.wbtcToken) {
       throw new Error('Contracts not initialized');
     }
@@ -184,7 +184,7 @@ class ContractService {
     }
   }
 
-  async releaseEscrow (invoiceId) {
+  async releaseEscrow(invoiceId) {
     if (!this.invoiceRegistry) {
       throw new Error('InvoiceRegistry contract not initialized');
     }
@@ -209,7 +209,61 @@ class ContractService {
     }
   }
 
-  async getInvoice (invoiceId) {
+  async disputeInvoice(invoiceId) {
+    if (!this.invoiceRegistry) {
+      throw new Error('InvoiceRegistry contract not initialized');
+    }
+
+    try {
+      const invoiceIdU256 = uint256.bnToUint256(BigInt(invoiceId));
+
+      const tx = await this.invoiceRegistry.invoke(
+        'dispute_invoice',
+        [invoiceIdU256.low, invoiceIdU256.high]
+      );
+
+      const receipt = await this.waitForTransaction(tx.transaction_hash);
+
+      return {
+        transactionHash: tx.transaction_hash,
+        blockNumber: receipt.block_number,
+        success: true
+      };
+    } catch (error) {
+      throw new Error(`Failed to dispute invoice: ${error.message}`);
+    }
+  }
+
+  async resolveDispute(invoiceId, winnerAddress) {
+    if (!this.invoiceRegistry) {
+      throw new Error('InvoiceRegistry contract not initialized');
+    }
+
+    try {
+      const invoiceIdU256 = uint256.bnToUint256(BigInt(invoiceId));
+
+      const tx = await this.invoiceRegistry.invoke(
+        'resolve_dispute',
+        [
+          invoiceIdU256.low,
+          invoiceIdU256.high,
+          winnerAddress
+        ]
+      );
+
+      const receipt = await this.waitForTransaction(tx.transaction_hash);
+
+      return {
+        transactionHash: tx.transaction_hash,
+        blockNumber: receipt.block_number,
+        success: true
+      };
+    } catch (error) {
+      throw new Error(`Failed to resolve dispute: ${error.message}`);
+    }
+  }
+
+  async getInvoice(invoiceId) {
     if (!this.invoiceRegistry) {
       throw new Error('InvoiceRegistry contract not initialized');
     }
@@ -233,7 +287,9 @@ class ContractService {
         expiryTimestamp: uint256.uint256ToBN(result.expiryTimestamp).toString(),
         status: Number(result.status),
         createdAt: uint256.uint256ToBN(result.createdAt).toString(),
-        paidAt: uint256.uint256ToBN(result.paidAt).toString()
+        paidAt: uint256.uint256ToBN(result.paidAt).toString(),
+        payer: result.payer ? `0x${result.payer.toString(16)}` : '0x0',
+        isDisputed: result.is_disputed || false
       };
     } catch (error) {
       console.error(`Failed to get invoice ${invoiceId}:`, error.message);
@@ -241,7 +297,7 @@ class ContractService {
     }
   }
 
-  async getBalance (address) {
+  async getBalance(address) {
     if (!this.wbtcToken) {
       throw new Error('WrappedBTC contract not initialized');
     }
@@ -255,7 +311,7 @@ class ContractService {
     }
   }
 
-  async getInvoices (filter = {}) {
+  async getInvoices(filter = {}) {
     if (!this.invoiceRegistry) {
       throw new Error('InvoiceRegistry contract not initialized');
     }
@@ -296,7 +352,7 @@ class ContractService {
     }
   }
 
-  async getNextInvoiceId () {
+  async getNextInvoiceId() {
     if (!this.invoiceRegistry) {
       throw new Error('InvoiceRegistry contract not initialized');
     }
@@ -311,7 +367,7 @@ class ContractService {
   }
 
   // Complete WrappedBTC ABI
-  getWrappedBTCABI () {
+  getWrappedBTCABI() {
     return [
       {
         type: 'function',
@@ -409,7 +465,7 @@ class ContractService {
     ];
   }
 
-  getInvoiceRegistryABI () {
+  getInvoiceRegistryABI() {
     return [
       {
         type: 'function',
@@ -485,11 +541,28 @@ class ContractService {
         inputs: [{ name: 'invoiceId', type: 'Uint256' }],
         outputs: [{ name: 'success', type: 'felt' }],
         stateMutability: 'external'
+      },
+      {
+        type: 'function',
+        name: 'dispute_invoice',
+        inputs: [{ name: 'invoiceId', type: 'Uint256' }],
+        outputs: [{ name: 'success', type: 'felt' }],
+        stateMutability: 'external'
+      },
+      {
+        type: 'function',
+        name: 'resolve_dispute',
+        inputs: [
+          { name: 'invoiceId', type: 'Uint256' },
+          { name: 'winner', type: 'felt' }
+        ],
+        outputs: [{ name: 'success', type: 'felt' }],
+        stateMutability: 'external'
       }
     ];
   }
 
-  getEscrowABI () {
+  getEscrowABI() {
     return [
       {
         type: 'function',

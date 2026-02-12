@@ -37,6 +37,7 @@ trait IInvoiceRegistry<TContractState> {
     fn release_escrow(ref self: TContractState, invoice_id: u256) -> bool;
     fn dispute_invoice(ref self: TContractState, invoice_id: u256) -> bool;
     fn resolve_dispute(ref self: TContractState, invoice_id: u256, winner: ContractAddress) -> bool;
+    fn set_escrow_address(ref self: TContractState, escrow_address: ContractAddress) -> bool;
 }
 
 // ERC20 Interface for token transfers
@@ -160,7 +161,6 @@ mod InvoiceRegistry {
     ) {
         // Validate addresses
         assert(!wbtc_token_address.is_zero(), 'WBTC address cannot be zero');
-        assert(!escrow_contract_address.is_zero(), 'Escrow address cannot be zero');
         assert(!owner_address.is_zero(), 'Owner cannot be zero address');
 
         self.wbtc_token.write(wbtc_token_address);
@@ -432,6 +432,17 @@ mod InvoiceRegistry {
             self._update_invoice_status(invoice_id, STATUS_RESOLVED);
 
             self._unlock();
+            true
+        }
+
+        fn set_escrow_address(ref self: ContractState, escrow_address: ContractAddress) -> bool {
+            let caller = get_caller_address();
+            let owner = self.owner.read();
+
+            assert(caller == owner, 'Only owner can set escrow');
+            assert(!escrow_address.is_zero(), 'Escrow address cannot be zero');
+
+            self.escrow_contract.write(escrow_address);
             true
         }
     }

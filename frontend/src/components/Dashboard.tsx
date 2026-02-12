@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { api, formatAmount, formatTimestamp } from '@/services/api'
 import { Section } from './Section'
 import { StatusBadge } from './StatusBadge'
+import { DisputeBadge } from './DisputeBadge'
 import type { Invoice, NotificationType } from '@/types'
 
 interface Props {
@@ -72,6 +73,7 @@ export function Dashboard({ connected, address, refreshKey, onNotify, onLoading 
           <option value="">All Invoices</option>
           <option value="created">My Created</option>
           <option value="paid">My Paid</option>
+          <option value="disputed">Disputed</option>
         </select>
         <button
           onClick={() => void loadInvoices()}
@@ -122,7 +124,10 @@ function InvoiceCard({
 
       <div className="flex justify-between items-center mb-3">
         <span className="font-bold text-gray-200 text-lg">#{invoice.id}</span>
-        <StatusBadge status={invoice.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={invoice.status} />
+          {invoice.isDisputed && <DisputeBadge isDisputed={true} />}
+        </div>
       </div>
 
       <p className="text-2xl font-bold text-bitcoin-orange mb-3">

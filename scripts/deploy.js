@@ -44,9 +44,10 @@ class ContractDeployer {
       const escrowAddress = await this.deployEscrow(wbtcAddress, invoiceRegistryAddress);
       console.log('✅ Escrow deployed at:', escrowAddress);
 
-      // Redeploy InvoiceRegistry with escrow address
-      invoiceRegistryAddress = await this.deployInvoiceRegistry(wbtcAddress, escrowAddress);
-      console.log('✅ InvoiceRegistry updated at:', invoiceRegistryAddress);
+      // Link Escrow to InvoiceRegistry
+      console.log('🔗 Linking Escrow to InvoiceRegistry...');
+      await this.setEscrowAddress(invoiceRegistryAddress, escrowAddress);
+      console.log('✅ InvoiceRegistry linked to Escrow');
 
       // Update .env file with final addresses
       await this.updateEnvironment(wbtcAddress, invoiceRegistryAddress, escrowAddress);
@@ -85,7 +86,7 @@ class ContractDeployer {
     return contract.address;
   }
 
-async deployInvoiceRegistry(wbtcAddress, escrowAddress = null) {
+  async deployInvoiceRegistry(wbtcAddress, escrowAddress = null) {
     console.log('📋 Deploying InvoiceRegistry contract...');
 
     // Compile and declare contract
@@ -96,7 +97,7 @@ async deployInvoiceRegistry(wbtcAddress, escrowAddress = null) {
     });
 
     // Deploy contract with owner address and optionally escrow address
-    const constructorCalldata = escrowAddress 
+    const constructorCalldata = escrowAddress
       ? [wbtcAddress, escrowAddress, this.account.address]
       : [wbtcAddress, '0x0', this.account.address]; // Temporary escrow address
 
@@ -106,7 +107,7 @@ async deployInvoiceRegistry(wbtcAddress, escrowAddress = null) {
     return contract.address;
   }
 
-async deployEscrow(wbtcAddress, invoiceRegistryAddress) {
+  async deployEscrow(wbtcAddress, invoiceRegistryAddress) {
     console.log('🔒 Deploying Escrow contract...');
 
     // Compile and declare contract
@@ -147,6 +148,23 @@ async deployEscrow(wbtcAddress, invoiceRegistryAddress) {
     fs.writeFileSync('.env', envContent);
 
     console.log('✅ Environment updated successfully');
+  }
+
+  async setEscrowAddress(invoiceRegistryAddress, escrowAddress) {
+    const { contractFactory } = await starknet.declareIfNot({
+      contract: './contracts/InvoiceRegistry.cairo',
+      casm: './contracts/InvoiceRegistry.casm',
+      senderAddress: this.account.address,
+    });
+
+    const contract = new starknet.Contract(contractFactory.abi, invoiceRegistryAddress, this.provider);
+    contract.connect(this.account);
+
+    const call = contract.populate('set_escrow_address', [escrowAddress]);
+    const tx = await this.account.execute(call);
+
+    console.log('⏳ Waiting for set_escrow_address transaction:', tx.transaction_hash);
+    await this.provider.waitForTransaction(tx.transaction_hash);
   }
 }
 

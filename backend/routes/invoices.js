@@ -96,6 +96,60 @@ router.post('/release', async (req, res) => {
   }
 });
 
+// Dispute invoice
+router.post('/dispute', async (req, res) => {
+  try {
+    const { invoiceId } = req.body;
+
+    if (!invoiceId) {
+      return res.status(400).json({
+        error: 'invoiceId is required'
+      });
+    }
+
+    const result = await contractService.disputeInvoice(invoiceId);
+
+    res.json({
+      success: true,
+      message: 'Invoice disputed successfully',
+      transactionHash: result.transactionHash
+    });
+  } catch (error) {
+    console.error('Dispute invoice error:', error);
+    res.status(500).json({
+      error: 'Failed to dispute invoice',
+      details: error.message
+    });
+  }
+});
+
+// Resolve dispute
+router.post('/resolve', async (req, res) => {
+  try {
+    const { invoiceId, winner } = req.body;
+
+    if (!invoiceId || !winner) {
+      return res.status(400).json({
+        error: 'invoiceId and winner address are required'
+      });
+    }
+
+    const result = await contractService.resolveDispute(invoiceId, winner);
+
+    res.json({
+      success: true,
+      message: 'Dispute resolved successfully',
+      transactionHash: result.transactionHash
+    });
+  } catch (error) {
+    console.error('Resolve dispute error:', error);
+    res.status(500).json({
+      error: 'Failed to resolve dispute',
+      details: error.message
+    });
+  }
+});
+
 // Get invoices (list/filter)
 router.get('/', async (req, res) => {
   try {
@@ -207,12 +261,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // Helper function to convert status number to text
-function getStatusText (status) {
+function getStatusText(status) {
   const statusMap = {
     0: 'Pending',
     1: 'Paid',
     2: 'Released',
-    3: 'Expired'
+    3: 'Expired',
+    4: 'Resolved'
   };
   return statusMap[status] || 'Unknown';
 }
