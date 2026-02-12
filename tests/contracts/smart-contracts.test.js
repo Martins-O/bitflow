@@ -7,7 +7,7 @@ describe('Smart Contract Tests', () => {
 
     beforeEach(() => {
       const starknet = require('starknet');
-      
+
       mockContract = {
         call: jest.fn(),
         invoke: jest.fn(),
@@ -41,14 +41,14 @@ describe('Smart Contract Tests', () => {
         // Mock balance check
         mockContract.call.mockResolvedValue({
           balance: {
-            low: Number(initialSupply % 2n**128n),
+            low: Number(initialSupply % 2n ** 128n),
             high: Number(initialSupply >> 128n)
           }
         });
 
         const result = await mockContract.call('balanceOf', [initialOwner]);
-        
-        expect(result.balance.low).toBe(Number(initialSupply % 2n**128n));
+
+        expect(result.balance.low).toBe(Number(initialSupply % 2n ** 128n));
         expect(result.balance.high).toBe(Number(initialSupply >> 128n));
       });
     });
@@ -56,27 +56,27 @@ describe('Smart Contract Tests', () => {
     describe('Basic ERC20 Functions', () => {
       test('should return correct token name', async () => {
         mockContract.call.mockResolvedValue({ res: 12345 }); // felt representation
-        
+
         const result = await mockContract.call('name');
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('name');
         expect(result.res).toBeDefined();
       });
 
       test('should return correct token symbol', async () => {
         mockContract.call.mockResolvedValue({ res: 67890 });
-        
+
         const result = await mockContract.call('symbol');
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('symbol');
         expect(result.res).toBeDefined();
       });
 
       test('should return correct decimals', async () => {
         mockContract.call.mockResolvedValue({ res: 18 });
-        
+
         const result = await mockContract.call('decimals');
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('decimals');
         expect(result.res).toBe(18);
       });
@@ -85,15 +85,15 @@ describe('Smart Contract Tests', () => {
         const totalSupply = testUtils.btcToWei(1000000);
         mockContract.call.mockResolvedValue({
           res: {
-            low: Number(totalSupply % 2n**128n),
+            low: Number(totalSupply % 2n ** 128n),
             high: Number(totalSupply >> 128n)
           }
         });
 
         const result = await mockContract.call('totalSupply');
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('totalSupply');
-        expect(result.res.low).toBe(Number(totalSupply % 2n**128n));
+        expect(result.res.low).toBe(Number(totalSupply % 2n ** 128n));
       });
     });
 
@@ -101,35 +101,35 @@ describe('Smart Contract Tests', () => {
       test('should return correct balance for account', async () => {
         const address = testUtils.randomAddress();
         const balance = testUtils.btcToWei(100);
-        
+
         mockContract.call.mockResolvedValue({
           balance: {
-            low: Number(balance % 2n**128n),
+            low: Number(balance % 2n ** 128n),
             high: Number(balance >> 128n)
           }
         });
 
         const result = await mockContract.call('balanceOf', [address]);
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('balanceOf', [address]);
-        expect(result.balance.low).toBe(Number(balance % 2n**128n));
+        expect(result.balance.low).toBe(Number(balance % 2n ** 128n));
       });
 
       test('should transfer tokens successfully', async () => {
         const recipient = testUtils.randomAddress();
         const amount = testUtils.btcToWei(50);
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('transfer', [
           recipient,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('transfer', [
           recipient,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
         expect(result.success).toBe(true);
@@ -138,18 +138,18 @@ describe('Smart Contract Tests', () => {
       test('should approve spending allowance', async () => {
         const spender = testUtils.randomAddress();
         const amount = testUtils.btcToWei(75);
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('approve', [
           spender,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('approve', [
           spender,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
         expect(result.success).toBe(true);
@@ -159,18 +159,18 @@ describe('Smart Contract Tests', () => {
         const owner = testUtils.randomAddress();
         const spender = testUtils.randomAddress();
         const allowance = testUtils.btcToWei(25);
-        
+
         mockContract.call.mockResolvedValue({
           res: {
-            low: Number(allowance % 2n**128n),
+            low: Number(allowance % 2n ** 128n),
             high: Number(allowance >> 128n)
           }
         });
 
         const result = await mockContract.call('allowance', [owner, spender]);
-        
+
         expect(mockContract.call).toHaveBeenCalledWith('allowance', [owner, spender]);
-        expect(result.res.low).toBe(Number(allowance % 2n**128n));
+        expect(result.res.low).toBe(Number(allowance % 2n ** 128n));
       });
     });
 
@@ -178,18 +178,18 @@ describe('Smart Contract Tests', () => {
       test('should mint tokens to specified address', async () => {
         const to = testUtils.randomAddress();
         const amount = testUtils.btcToWei(1000);
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('mint', [
           to,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('mint', [
           to,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n)
         ]);
         expect(result.success).toBe(true);
@@ -202,7 +202,7 @@ describe('Smart Contract Tests', () => {
 
     beforeEach(() => {
       const starknet = require('starknet');
-      
+
       mockContract = {
         call: jest.fn(),
         invoke: jest.fn(),
@@ -226,28 +226,28 @@ describe('Smart Contract Tests', () => {
         });
 
         const result = await mockContract.invoke('createInvoice', [
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n),
           12345, // felt representation of description
           escrowEnabled ? 1 : 0,
-          expiryTimestamp % 2**128,
-          Math.floor(expiryTimestamp / 2**128)
+          expiryTimestamp % 2 ** 128,
+          Math.floor(expiryTimestamp / 2 ** 128)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('createInvoice', [
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n),
           12345,
           escrowEnabled ? 1 : 0,
-          expiryTimestamp % 2**128,
-          Math.floor(expiryTimestamp / 2**128)
+          expiryTimestamp % 2 ** 128,
+          Math.floor(expiryTimestamp / 2 ** 128)
         ]);
         expect(result.transaction_hash).toBe('0x123456789');
       });
 
       test('should validate invoice parameters', async () => {
         const amount = 0; // Invalid: zero amount
-        
+
         // Should fail validation
         expect(() => {
           mockContract.invoke('createInvoice', [
@@ -269,13 +269,13 @@ describe('Smart Contract Tests', () => {
         mockContract.call.mockResolvedValue({ invoice: mockInvoice });
 
         const result = await mockContract.call('getInvoice', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.call).toHaveBeenCalledWith('getInvoice', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
         expect(result.invoice).toEqual(mockInvoice);
       });
@@ -294,34 +294,34 @@ describe('Smart Contract Tests', () => {
     describe('Invoice Payment', () => {
       test('should pay direct invoice', async () => {
         const invoiceId = testUtils.randomInvoiceId();
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('payInvoice', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('payInvoice', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
         expect(result.success).toBe(true);
       });
 
       test('should pay invoice with escrow', async () => {
         const invoiceId = testUtils.randomInvoiceId();
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('payInvoiceWithEscrow', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('payInvoiceWithEscrow', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
         expect(result.success).toBe(true);
       });
@@ -330,17 +330,54 @@ describe('Smart Contract Tests', () => {
     describe('Invoice Status Management', () => {
       test('should mark invoice as expired', async () => {
         const invoiceId = testUtils.randomInvoiceId();
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('markInvoiceExpired', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('markInvoiceExpired', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
+        ]);
+        expect(result.success).toBe(true);
+      });
+
+      test('should dispute invoice', async () => {
+        const invoiceId = testUtils.randomInvoiceId();
+
+        mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
+
+        const result = await mockContract.invoke('disputeInvoice', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
+        ]);
+
+        expect(mockContract.invoke).toHaveBeenCalledWith('disputeInvoice', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
+        ]);
+        expect(result.success).toBe(true);
+      });
+
+      test('should resolve dispute', async () => {
+        const invoiceId = testUtils.randomInvoiceId();
+        const winner = testUtils.randomAddress();
+
+        mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
+
+        const result = await mockContract.invoke('resolveDispute', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
+          winner
+        ]);
+
+        expect(mockContract.invoke).toHaveBeenCalledWith('resolveDispute', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
+          winner
         ]);
         expect(result.success).toBe(true);
       });
@@ -352,7 +389,7 @@ describe('Smart Contract Tests', () => {
 
     beforeEach(() => {
       const starknet = require('starknet');
-      
+
       mockContract = {
         call: jest.fn(),
         invoke: jest.fn(),
@@ -372,19 +409,19 @@ describe('Smart Contract Tests', () => {
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('deposit', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           payer,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n),
           invoiceCreator
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('deposit', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           payer,
-          Number(amount % 2n**128n),
+          Number(amount % 2n ** 128n),
           Number(amount >> 128n),
           invoiceCreator
         ]);
@@ -395,17 +432,17 @@ describe('Smart Contract Tests', () => {
     describe('Escrow Release', () => {
       test('should release escrowed funds', async () => {
         const invoiceId = testUtils.randomInvoiceId();
-        
+
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('release', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('release', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
         expect(result.success).toBe(true);
       });
@@ -420,15 +457,15 @@ describe('Smart Contract Tests', () => {
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('refundAfterExpiry', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           refundee,
           reason
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('refundAfterExpiry', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           refundee,
           reason
         ]);
@@ -444,14 +481,14 @@ describe('Smart Contract Tests', () => {
         mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
 
         const result = await mockContract.invoke('emergencyWithdraw', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           recipient
         ]);
 
         expect(mockContract.invoke).toHaveBeenCalledWith('emergencyWithdraw', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128),
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
           recipient
         ]);
         expect(result.success).toBe(true);
@@ -466,23 +503,23 @@ describe('Smart Contract Tests', () => {
         mockContract.call.mockResolvedValue({ escrow: mockEscrow });
 
         const result = await mockContract.call('getEscrow', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
 
         expect(mockContract.call).toHaveBeenCalledWith('getEscrow', [
-          invoiceId % 2**128,
-          Math.floor(invoiceId / 2**128)
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
         ]);
         expect(result.escrow).toEqual(mockEscrow);
       });
 
       test('should get total escrowed amount', async () => {
         const totalAmount = testUtils.btcToWei(10.5);
-        
+
         mockContract.call.mockResolvedValue({
           amount: {
-            low: Number(totalAmount % 2n**128n),
+            low: Number(totalAmount % 2n ** 128n),
             high: Number(totalAmount >> 128n)
           }
         });
@@ -490,7 +527,46 @@ describe('Smart Contract Tests', () => {
         const result = await mockContract.call('getTotalEscrowed');
 
         expect(mockContract.call).toHaveBeenCalledWith('getTotalEscrowed');
-        expect(result.amount.low).toBe(Number(totalAmount % 2n**128n));
+        expect(result.amount.low).toBe(Number(totalAmount % 2n ** 128n));
+      });
+    });
+
+    describe('Escrow Dispute', () => {
+      test('should toggle dispute status', async () => {
+        const invoiceId = testUtils.randomInvoiceId();
+
+        mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
+
+        const result = await mockContract.invoke('toggleDispute', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
+        ]);
+
+        expect(mockContract.invoke).toHaveBeenCalledWith('toggleDispute', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128)
+        ]);
+        expect(result.success).toBe(true);
+      });
+
+      test('should arbitrate dispute', async () => {
+        const invoiceId = testUtils.randomInvoiceId();
+        const recipient = testUtils.randomAddress();
+
+        mockContract.invoke.mockResolvedValue(testUtils.mockContractResponse());
+
+        const result = await mockContract.invoke('arbitrate', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
+          recipient
+        ]);
+
+        expect(mockContract.invoke).toHaveBeenCalledWith('arbitrate', [
+          invoiceId % 2 ** 128,
+          Math.floor(invoiceId / 2 ** 128),
+          recipient
+        ]);
+        expect(result.success).toBe(true);
       });
     });
   });
@@ -514,7 +590,7 @@ describe('Smart Contract Tests', () => {
         call: jest.fn(),
         invoke: jest.fn()
       };
-      
+
       const invoiceRegistry = {
         call: jest.fn(),
         invoke: jest.fn()
@@ -535,7 +611,7 @@ describe('Smart Contract Tests', () => {
 
       // Create invoice
       const createResult = await invoiceRegistry.invoke('createInvoice', [
-        Number(amount % 2n**128n),
+        Number(amount % 2n ** 128n),
         Number(amount >> 128n),
         12345,
         1,
@@ -545,10 +621,10 @@ describe('Smart Contract Tests', () => {
 
       // Deposit to escrow
       const depositResult = await escrowContract.invoke('deposit', [
-        invoiceId % 2**128,
-        Math.floor(invoiceId / 2**128),
+        invoiceId % 2 ** 128,
+        Math.floor(invoiceId / 2 ** 128),
         testUtils.randomAddress(),
-        Number(amount % 2n**128n),
+        Number(amount % 2n ** 128n),
         Number(amount >> 128n),
         testUtils.randomAddress()
       ]);
