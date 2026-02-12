@@ -5,57 +5,122 @@ const RPC_URL =
   import.meta.env.VITE_STARKNET_RPC ||
   'https://starknet-sepolia.public.blastapi.io'
 
+export interface StarknetWallet {
+  id: string
+  name: string
+  icon?: string
+}
+
 class WalletService {
   connected = false
   account: AccountInterface | null = null
   address: string | null = null
   provider: RpcProvider | null = null
+  currentWallet: string | null = null
 
   private accountsChangedHandler: ((accounts: string[]) => void) | null = null
 
-  async connect(): Promise<WalletInfo> {
-    if (!window.starknet) {
+  // Detect available Starknet wallets
+  detectWallets(): StarknetWallet[] {
+    const wallets: StarknetWallet[] = []
+
+    // Check for ArgentX
+    if (window.starknet_argentX) {
+      wallets.push({
+        id: 'argentX',
+        name: 'Argent X',
+        icon: '🔷'
+      })
+    }
+
+    // Check for Braavos
+    if (window.starknet_braavos) {
+      wallets.push({
+        id: 'braavos',
+        name: 'Braavos',
+        icon: '🦁'
+      })
+    }
+
+    // Check for generic starknet (could be either)
+    if (window.starknet && !wallets.length) {
+      wallets.push({
+        id: 'starknet',
+        name: window.starknet.name || 'Starknet Wallet',
+        icon: '⚡'
+      })
+    }
+
+    return wallets
+  }
+
+  hasStarknetWallet(): boolean {
+    return !!(window.starknet || window.starknet_argentX || window.starknet_braavos)
+  }
+
+  async connect(walletId?: string): Promise<WalletInfo> {
+    // Select the appropriate wallet
+    let walletProvider = window.starknet
+
+    if (walletId === 'argentX' && window.starknet_argentX) {
+      walletProvider = window.starknet_argentX
+    } else if (walletId === 'braavos' && window.starknet_braavos) {
+      walletProvider = window.starknet_braavos
+    }
+
+    if (!walletProvider) {
       throw new Error(
-        'Starknet wallet not found. Please install Argent or Braavos wallet.',
+        'Starknet wallet not found. Please install ArgentX or Braavos wallet extension.',
       )
     }
 
-    await window.starknet.enable()
+    await walletProvider.enable()
 
-    if (!window.starknet.isConnected || !window.starknet.account) {
+    if (!walletProvider.isConnected || !walletProvider.account) {
       throw new Error('Failed to connect wallet. Please try again.')
     }
 
-    this.account = window.starknet.account
-    this.address = window.starknet.selectedAddress
+    this.account = walletProvider.account
+    this.address = walletProvider.selectedAddress
     this.connected = true
+    this.currentWallet = walletId || 'starknet'
     this.provider = new RpcProvider({ nodeUrl: RPC_URL })
 
     this.accountsChangedHandler = this.handleAccountsChanged.bind(this)
-    window.starknet.on('accountsChanged', this.accountsChangedHandler)
+    walletProvider.on('accountsChanged', this.accountsChangedHandler)
 
     return {
       connected: true,
       address: this.address,
-      wallet: window.starknet.name || 'Unknown Wallet',
+      wallet: walletProvider.name || 'Unknown Wallet',
     }
   }
 
   disconnect(): void {
-    if (window.starknet?.off && this.accountsChangedHandler) {
-      window.starknet.off('accountsChanged', this.accountsChangedHandler)
+    const walletProvider = this.getWalletProvider()
+
+    if (walletProvider?.off && this.accountsChangedHandler) {
+      walletProvider.off('accountsChanged', this.accountsChangedHandler)
     }
 
     this.connected = false
     this.account = null
     this.address = null
     this.provider = null
+    this.currentWallet = null
     this.accountsChangedHandler = null
   }
 
   isConnected(): boolean {
-    if (!window.starknet) return false
-    return window.starknet.isConnected && !!window.starknet.selectedAddress
+    const walletProvider = this.getWalletProvider()
+    if (!walletProvider) return false
+    return walletProvider.isConnected && !!walletProvider.selectedAddress
+  }
+
+  private getWalletProvider() {
+    if (this.currentWallet === 'argentX') return window.starknet_argentX
+    if (this.currentWallet === 'braavos') return window.starknet_braavos
+    return window.starknet
   }
 
   async sendTransaction(
