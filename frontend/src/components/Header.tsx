@@ -13,6 +13,7 @@ const navItems = [
   { to: '/pay', label: 'Pay' },
   { to: '/track', label: 'Track' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/disputes', label: 'Disputes' },
 ]
 
 export function Header({ connected, address, loading, onToggleWallet }: Props) {

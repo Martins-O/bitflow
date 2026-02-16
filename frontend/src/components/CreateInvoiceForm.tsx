@@ -1,5 +1,6 @@
 import { useState, useMemo, type FormEvent } from 'react'
-import { api } from '@/services/api'
+import { wallet } from '@/services/wallet'
+import { invalidateInvoiceCache } from '@/services/api'
 import { FormField } from './FormField'
 import type { NotificationType } from '@/types'
 
@@ -51,14 +52,16 @@ export function CreateInvoiceForm({
     setTxStatus({ message: 'Initializing transaction...', type: 'pending' })
 
     try {
-      const res = await api.createInvoice({
-        amount: parseFloat(amount),
+      const expiryTimestamp = Math.floor(Date.now() / 1000) + parseInt(expiry, 10) * 3600
+      const res = await wallet.createInvoice(
+        parseFloat(amount),
         description,
-        expiryHours: parseInt(expiry, 10),
         escrowEnabled,
-      })
+        expiryTimestamp,
+      )
 
-      setTxStatus({ message: `Invoice created successfully! ID: ${res.invoiceId}`, type: 'success' })
+      invalidateInvoiceCache()
+      setTxStatus({ message: `Invoice created! Tx: ${res.transactionHash.slice(0, 10)}...`, type: 'success' })
       setAmount('')
       setDescription('')
       setExpiry('24')

@@ -1,7 +1,47 @@
 import axios, { type AxiosInstance } from 'axios'
-import type { Invoice, CreateInvoiceData, InvoiceFilter } from '@/types'
+import type { Invoice } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+
+const CACHE_PREFIX = 'bitflow_'
+const INVOICE_TTL = 30_000
+const LIST_TTL = 15_000
+
+function getCached<T>(key: string, ttl: number): T | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw) as { data: T; ts: number }
+    if (Date.now() - ts > ttl) {
+      localStorage.removeItem(CACHE_PREFIX + key)
+      return null
+    }
+    return data
+  } catch {
+    return null
+  }
+}
+
+function setCache<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, ts: Date.now() }))
+  } catch {
+    // localStorage full or unavailable
+  }
+}
+
+export function invalidateInvoiceCache(invoiceId?: string): void {
+  try {
+    if (invoiceId) {
+      localStorage.removeItem(CACHE_PREFIX + `invoice_${invoiceId}`)
+    }
+    // Always invalidate list cache on any write
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(CACHE_PREFIX + 'invoices_'))
+    keys.forEach(k => localStorage.removeItem(k))
+  } catch {
+    // ignore
+  }
+}
 
 class ApiService {
   private client: AxiosInstance
@@ -23,72 +63,31 @@ class ApiService {
     )
   }
 
-  async createInvoice(data: CreateInvoiceData): Promise<{ invoiceId: string }> {
-    const response = await this.client.post('/invoices/create', {
-      amount: data.amount.toString(),
-      description: data.description,
-      escrowEnabled: data.escrowEnabled,
-      expiryTimestamp: this.calculateExpiryTimestamp(data.expiryHours),
-    })
-    return response.data
-  }
-
-  async payInvoice(
-    invoiceId: string,
-    useEscrow = false,
-  ): Promise<{ transactionHash: string }> {
-    const response = await this.client.post('/invoices/pay', {
-      invoiceId,
-      useEscrow,
-    })
-    return response.data
-  }
-
-  async releaseEscrow(invoiceId: string): Promise<{ transactionHash: string }> {
-    const response = await this.client.post('/invoices/release', {
-      invoiceId,
-    })
-    return response.data
-  }
-
-  async disputeInvoice(invoiceId: string): Promise<{ transactionHash: string }> {
-    const response = await this.client.post('/invoices/dispute', {
-      invoiceId,
-    })
-    return response.data
-  }
-
-  async resolveDispute(
-    invoiceId: string,
-    winner: string,
-  ): Promise<{ transactionHash: string }> {
-    const response = await this.client.post('/invoices/resolve', {
-      invoiceId,
-      winner,
-    })
-    return response.data
-  }
-
   async getInvoice(invoiceId: string): Promise<Invoice> {
+    const cached = getCached<Invoice>(`invoice_${invoiceId}`, INVOICE_TTL)
+    if (cached) return cached
+
     const response = await this.client.get(`/invoices/${invoiceId}`)
-    return response.data
+    const invoice = response.data.invoice
+    setCache(`invoice_${invoiceId}`, invoice)
+    return invoice
   }
 
-  async getInvoices(filter: InvoiceFilter = {}): Promise<Invoice[]> {
-    const params = new URLSearchParams()
-    if (filter.address) params.append('address', filter.address)
-    if (filter.status) params.append('status', filter.status)
+  async getInvoices(filter: Record<string, string> = {}): Promise<Invoice[]> {
+    const filterKey = `invoices_${JSON.stringify(filter)}`
+    const cached = getCached<Invoice[]>(filterKey, LIST_TTL)
+    if (cached) return cached
+
+    const params = new URLSearchParams(filter)
     const response = await this.client.get(`/invoices?${params.toString()}`)
-    return response.data
+    const invoices = response.data.invoices
+    setCache(filterKey, invoices)
+    return invoices
   }
 
-  async getBalance(address: string): Promise<{ balance: string }> {
-    const response = await this.client.get(`/balance/${address}`)
+  async getBalance(address: string): Promise<{ balance: string; balanceInBTC: string }> {
+    const response = await this.client.get(`/invoices/balance/${address}`)
     return response.data
-  }
-
-  private calculateExpiryTimestamp(hours: number): number {
-    return Math.floor(Date.now() / 1000) + hours * 3600
   }
 }
 

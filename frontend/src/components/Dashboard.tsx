@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, formatAmount, formatTimestamp } from '@/services/api'
+import { api, formatAmount, formatTimestamp, invalidateInvoiceCache } from '@/services/api'
+import { wallet } from '@/services/wallet'
 import { Section } from './Section'
 import { StatusBadge } from './StatusBadge'
 import { DisputeBadge } from './DisputeBadge'
@@ -52,7 +53,8 @@ export function Dashboard({ connected, address, refreshKey, onNotify, onLoading 
 
     onLoading(true)
     try {
-      await api.releaseEscrow(invoiceId)
+      await wallet.releaseEscrow(invoiceId)
+      invalidateInvoiceCache(invoiceId)
       onNotify('Escrow released successfully!', 'success')
       void loadInvoices()
     } catch (err) {

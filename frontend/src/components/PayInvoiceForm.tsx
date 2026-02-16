@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { api, formatAmount, formatTimestamp } from '@/services/api'
+import { api, formatAmount, formatTimestamp, invalidateInvoiceCache } from '@/services/api'
+import { wallet } from '@/services/wallet'
 import { FormField } from './FormField'
 import type { Invoice, NotificationType } from '@/types'
 
@@ -46,9 +47,18 @@ export function PayInvoiceForm({ connected, onNotify, onLoading, onPaid }: Props
     setTxStatus({ message: 'Initializing payment...', type: 'pending' })
 
     try {
-      // Use the flag if specified in the invoice or assume escrow if enabled
-      const res = await api.payInvoice(invoice.id, invoice.escrowEnabled)
+      if (!invoice.amountRaw) {
+        throw new Error('Invoice amount data missing. Please look up the invoice again.')
+      }
 
+      const res = await wallet.payInvoice(
+        invoice.id,
+        invoice.amountRaw.low,
+        invoice.amountRaw.high,
+        invoice.escrowEnabled,
+      )
+
+      invalidateInvoiceCache(invoice.id)
       setTxStatus({
         message: `Payment successful! Tx Hash: ${res.transactionHash.slice(0, 10)}...`,
         type: 'success'

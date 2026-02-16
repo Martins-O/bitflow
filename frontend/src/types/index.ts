@@ -3,6 +3,7 @@ export type InvoiceStatus = 'PENDING' | 'PAID' | 'RELEASED' | 'EXPIRED' | 'RESOL
 export interface Invoice {
   id: string
   amount: string
+  amountRaw?: { low: string; high: string }
   description: string
   status: InvoiceStatus
   escrowEnabled: boolean
