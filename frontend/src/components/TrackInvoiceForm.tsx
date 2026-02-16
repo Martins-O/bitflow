@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { api, formatAmount, formatTimestamp, formatAddress } from '@/services/api'
+import { api, formatAmount, formatTimestamp, formatAddress, invalidateInvoiceCache } from '@/services/api'
+import { wallet } from '@/services/wallet'
 import { ResultMessage } from './ResultMessage'
 import { StatusBadge } from './StatusBadge'
 import { DisputeBadge } from './DisputeBadge'
@@ -46,13 +47,14 @@ export function TrackInvoiceForm() {
     try {
       let result
       if (action === 'release') {
-        result = await api.releaseEscrow(invoice.id)
+        result = await wallet.releaseEscrow(invoice.id)
         alert(`Funds Released! Tx: ${result.transactionHash}`)
       } else if (action === 'resolve' && winner) {
-        result = await api.resolveDispute(invoice.id, winner)
+        result = await wallet.resolveDispute(invoice.id, winner)
         alert(`Dispute Resolved! Tx: ${result.transactionHash}`)
       }
 
+      invalidateInvoiceCache(invoice.id)
       // Refresh invoice
       const updated = await api.getInvoice(invoice.id)
       setInvoice(updated)
@@ -69,9 +71,10 @@ export function TrackInvoiceForm() {
     setError(null)
 
     try {
-      const result = await api.disputeInvoice(invoice.id)
+      const result = await wallet.disputeInvoice(invoice.id)
       alert(`Dispute Raised! Tx: ${result.transactionHash}\nReason: ${reason}`)
 
+      invalidateInvoiceCache(invoice.id)
       // Refresh invoice
       const updated = await api.getInvoice(invoice.id)
       setInvoice(updated)

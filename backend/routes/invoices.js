@@ -174,8 +174,7 @@ router.get('/', async (req, res) => {
       const amountBN = uint256.uint256ToBN({ low: invoice.amount.low, high: invoice.amount.high });
       return {
         ...invoice,
-        amountInBTC: contractService.weiToAmount(amountBN),
-        statusText: getStatusText(invoice.status)
+        amount: contractService.weiToAmount(amountBN),
       };
     });
 
@@ -241,14 +240,13 @@ router.get('/:id', async (req, res) => {
     }
 
     const amountBN = uint256.uint256ToBN({ low: invoice.amount.low, high: invoice.amount.high });
-    const amountInBTC = contractService.weiToAmount(amountBN);
 
     res.json({
       success: true,
       invoice: {
         ...invoice,
-        amountInBTC,
-        statusText: getStatusText(invoice.status)
+        amountRaw: { low: invoice.amount.low, high: invoice.amount.high },
+        amount: contractService.weiToAmount(amountBN),
       }
     });
   } catch (error) {
@@ -259,17 +257,5 @@ router.get('/:id', async (req, res) => {
     });
   }
 });
-
-// Helper function to convert status number to text
-function getStatusText(status) {
-  const statusMap = {
-    0: 'Pending',
-    1: 'Paid',
-    2: 'Released',
-    3: 'Expired',
-    4: 'Resolved'
-  };
-  return statusMap[status] || 'Unknown';
-}
 
 module.exports = router;

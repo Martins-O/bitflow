@@ -1,4 +1,5 @@
 const { RpcProvider, Account, Contract, uint256, shortString } = require('starknet');
+const invoiceCache = require('./invoiceCache');
 
 // Convert a decimal amount string to BigInt wei (avoids floating point errors)
 function amountToWei(amount) {
@@ -132,6 +133,8 @@ class ContractService {
 
       const receipt = await this.waitForTransaction(tx.transaction_hash);
 
+      invoiceCache.invalidateAll(); // New invoice created, invalidate caches
+
       return {
         transactionHash: tx.transaction_hash,
         blockNumber: receipt.block_number,
@@ -174,6 +177,8 @@ class ContractService {
 
       const receipt = await this.waitForTransaction(payTx.transaction_hash);
 
+      invoiceCache.invalidateInvoice(invoiceId);
+
       return {
         transactionHash: payTx.transaction_hash,
         blockNumber: receipt.block_number,
@@ -199,6 +204,8 @@ class ContractService {
 
       const receipt = await this.waitForTransaction(tx.transaction_hash);
 
+      invoiceCache.invalidateInvoice(invoiceId);
+
       return {
         transactionHash: tx.transaction_hash,
         blockNumber: receipt.block_number,
@@ -223,6 +230,8 @@ class ContractService {
       );
 
       const receipt = await this.waitForTransaction(tx.transaction_hash);
+
+      invoiceCache.invalidateInvoice(invoiceId);
 
       return {
         transactionHash: tx.transaction_hash,
@@ -253,6 +262,8 @@ class ContractService {
 
       const receipt = await this.waitForTransaction(tx.transaction_hash);
 
+      invoiceCache.invalidateInvoice(invoiceId);
+
       return {
         transactionHash: tx.transaction_hash,
         blockNumber: receipt.block_number,
@@ -268,6 +279,10 @@ class ContractService {
       throw new Error('InvoiceRegistry contract not initialized');
     }
 
+    // Check cache first
+    const cached = invoiceCache.getInvoice(invoiceId);
+    if (cached) return cached;
+
     try {
       const invoiceIdU256 = uint256.bnToUint256(BigInt(invoiceId));
       const result = await this.invoiceRegistry.call(
@@ -275,7 +290,7 @@ class ContractService {
         [invoiceIdU256.low, invoiceIdU256.high]
       );
 
-      return {
+      const invoice = {
         id: uint256.uint256ToBN(result.id).toString(),
         creator: `0x${result.creator.toString(16)}`,
         amount: {
@@ -285,12 +300,17 @@ class ContractService {
         description: shortString.decodeShortString(result.description.toString()),
         escrowEnabled: result.escrowEnabled,
         expiryTimestamp: uint256.uint256ToBN(result.expiryTimestamp).toString(),
-        status: Number(result.status),
+        statusCode: Number(result.status),
+        status: ['PENDING', 'PAID', 'RELEASED', 'EXPIRED', 'RESOLVED'][Number(result.status)] || 'UNKNOWN',
         createdAt: uint256.uint256ToBN(result.createdAt).toString(),
         paidAt: uint256.uint256ToBN(result.paidAt).toString(),
         payer: result.payer ? `0x${result.payer.toString(16)}` : '0x0',
         isDisputed: result.is_disputed || false
       };
+
+      invoiceCache.setInvoice(invoiceId, invoice);
+
+      return invoice;
     } catch (error) {
       console.error(`Failed to get invoice ${invoiceId}:`, error.message);
       return null;
@@ -317,36 +337,59 @@ class ContractService {
     }
 
     try {
-      const nextIdResult = await this.invoiceRegistry.call('getNextInvoiceId');
-      const nextId = Number(uint256.uint256ToBN(nextIdResult.id));
+      const filterKey = JSON.stringify(filter);
+      const cachedList = invoiceCache.getList(filterKey);
+      if (cachedList) return cachedList;
+
+      let nextId = invoiceCache.getNextId();
+      if (!nextId) {
+        const nextIdResult = await this.invoiceRegistry.call('getNextInvoiceId');
+        nextId = Number(uint256.uint256ToBN(nextIdResult.id));
+        invoiceCache.setNextId(nextId);
+      }
+
       const allInvoices = [];
 
-      for (let i = 1; i < nextId; i++) {
-        try {
-          const invoice = await this.getInvoice(i);
-          if (!invoice) continue;
-
-          // Apply filters
-          if (filter.type === 'created' && filter.address && invoice.creator !== filter.address) {
-            continue;
+      // Fetch invoices concurrently in batches of 5 for better performance
+      const batchSize = 5;
+      for (let i = 1; i < nextId; i += batchSize) {
+        const batch = [];
+        for (let j = i; j < Math.min(i + batchSize, nextId); j++) {
+          batch.push(this.getInvoice(j)); // will use cache if available
+        }
+        const results = await Promise.allSettled(batch);
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            allInvoices.push(result.value);
           }
-          if (filter.type === 'paid' && invoice.status !== 1) {
-            continue;
-          }
-          if (filter.address && !filter.type && invoice.creator !== filter.address) {
-            continue;
-          }
-
-          allInvoices.push(invoice);
-        } catch (error) {
-          // Skip invalid invoices
         }
       }
 
+      // Apply filters
+      const filtered = allInvoices.filter(invoice => {
+        if (filter.type === 'created' && filter.address && invoice.creator !== filter.address) {
+          return false;
+        }
+        if (filter.type === 'paid' && invoice.status !== 1) {
+          return false;
+        }
+        if (filter.type === 'disputed' && !invoice.isDisputed) {
+          return false;
+        }
+        if (filter.address && !filter.type && invoice.creator !== filter.address) {
+          return false;
+        }
+        return true;
+      });
+
       // Apply pagination
       const offset = filter.offset || 0;
-      const limit = filter.limit || allInvoices.length;
-      return allInvoices.slice(offset, offset + limit);
+      const limit = filter.limit || filtered.length;
+      const result = filtered.slice(offset, offset + limit);
+
+      invoiceCache.setList(filterKey, result);
+
+      return result;
     } catch (error) {
       throw new Error(`Failed to get invoices: ${error.message}`);
     }

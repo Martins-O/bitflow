@@ -11,7 +11,9 @@ declare global {
       on: (event: string, handler: (accounts: string[]) => void) => void
       off: (event: string, handler: (accounts: string[]) => void) => void
     }
+    starknet_argentX?: any
+    starknet_braavos?: any
   }
 }
 
-export {}
+export { }

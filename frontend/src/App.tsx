@@ -5,6 +5,7 @@ import { CreatePage } from '@/pages/CreatePage'
 import { PayPage } from '@/pages/PayPage'
 import { TrackPage } from '@/pages/TrackPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { DisputesPage } from '@/pages/DisputesPage'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="pay" element={<PayPage />} />
           <Route path="track" element={<TrackPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="disputes" element={<DisputesPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

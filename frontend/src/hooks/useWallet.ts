@@ -7,10 +7,10 @@ export function useWallet() {
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (walletId?: string) => {
     setLoading(true)
     try {
-      const info = await wallet.connect()
+      const info = await wallet.connect(walletId)
       setWalletInfo(info)
       setConnected(true)
       return info

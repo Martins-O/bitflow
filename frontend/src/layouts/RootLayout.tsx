@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Header } from '@/components/Header'
+import { Footer } from '@/components/Footer'
+import { WalletModal } from '@/components/WalletModal'
 import { Notification } from '@/components/Notification'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { useWallet } from '@/hooks/useWallet'
@@ -8,10 +10,11 @@ import { useNotification } from '@/hooks/useNotification'
 import type { NotificationType, LayoutContext } from '@/types'
 
 export function RootLayout() {
-  const { connected, address, loading: walletLoading, toggle } = useWallet()
+  const { connected, address, loading: walletLoading, connect, toggle } = useWallet()
   const { notification, show: showNotification, hide: hideNotification } = useNotification()
   const [globalLoading, setGlobalLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [walletModalOpen, setWalletModalOpen] = useState(false)
   const navigate = useNavigate()
 
   const refreshDashboard = useCallback(() => {
@@ -24,17 +27,28 @@ export function RootLayout() {
   )
 
   const handleToggleWallet = useCallback(async () => {
+    if (connected) {
+      try {
+        await toggle()
+        showNotification('Wallet disconnected', 'info')
+      } catch (err) {
+        showNotification((err as Error).message, 'error')
+      }
+    } else {
+      setWalletModalOpen(true)
+    }
+  }, [toggle, connected, showNotification])
+
+  const handleWalletConnect = useCallback(async (walletId: string) => {
     try {
-      await toggle()
-      showNotification(
-        connected ? 'Wallet disconnected' : 'Wallet connected successfully',
-        connected ? 'info' : 'success',
-      )
-      if (!connected) refreshDashboard()
+      await connect(walletId)
+      showNotification('Wallet connected successfully', 'success')
+      refreshDashboard()
     } catch (err) {
       showNotification((err as Error).message, 'error')
+      throw err
     }
-  }, [toggle, connected, showNotification, refreshDashboard])
+  }, [connect, showNotification, refreshDashboard])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -102,12 +116,15 @@ export function RootLayout() {
         <Outlet context={{ ...context, refreshKey }} />
       </main>
 
-      <footer className="text-center text-gray-500 py-8 text-sm border-t border-white/5">
-        <p>Built for the Starknet ecosystem</p>
-      </footer>
+      <Footer />
 
       <Notification notification={notification} onClose={hideNotification} />
       <LoadingOverlay visible={globalLoading} />
+      <WalletModal
+        isOpen={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+        onConnect={handleWalletConnect}
+      />
     </>
   )
 }
