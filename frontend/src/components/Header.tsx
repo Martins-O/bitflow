@@ -13,6 +13,7 @@ const navItems = [
   { to: '/pay', label: 'Pay' },
   { to: '/track', label: 'Track' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/payments', label: 'Payments' },
   { to: '/disputes', label: 'Disputes' },
 ]
 
@@ -36,8 +37,8 @@ export function Header({ connected, address, loading, onToggleWallet }: Props) {
                 key={to}
                 to={to}
                 className={`hidden sm:block text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-200 ${pathname === to
-                    ? 'text-bitcoin-orange bg-bitcoin-orange/10'
-                    : 'text-gray-400 hover:text-bitcoin-orange hover:bg-white/5'
+                  ? 'text-bitcoin-orange bg-bitcoin-orange/10'
+                  : 'text-gray-400 hover:text-bitcoin-orange hover:bg-white/5'
                   }`}
               >
                 {label}
@@ -47,8 +48,8 @@ export function Header({ connected, address, loading, onToggleWallet }: Props) {
             <div className="flex items-center gap-3 px-4 py-2 bg-dark-secondary/80 rounded-xl border border-white/5">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${connected
-                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                    : 'bg-gray-500 animate-pulse'
+                  ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                  : 'bg-gray-500 animate-pulse'
                   }`}
               />
               <span className="text-sm font-mono text-gray-400">
@@ -62,8 +63,8 @@ export function Header({ connected, address, loading, onToggleWallet }: Props) {
               onClick={onToggleWallet}
               disabled={loading}
               className={`px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 ${connected
-                  ? 'bg-dark-tertiary text-gray-300 border border-white/10 hover:border-white/20 hover:text-white'
-                  : 'bg-orange-gradient text-white shadow-glow-orange hover:shadow-glow-orange-lg hover:-translate-y-0.5'
+                ? 'bg-dark-tertiary text-gray-300 border border-white/10 hover:border-white/20 hover:text-white'
+                : 'bg-orange-gradient text-white shadow-glow-orange hover:shadow-glow-orange-lg hover:-translate-y-0.5'
                 } disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none`}
             >
               {loading ? 'Connecting...' : connected ? 'Disconnect' : 'Connect Wallet'}

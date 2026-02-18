@@ -6,6 +6,7 @@ import { PayPage } from '@/pages/PayPage'
 import { TrackPage } from '@/pages/TrackPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { DisputesPage } from '@/pages/DisputesPage'
+import { PaymentsPage } from '@/pages/PaymentsPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="track" element={<TrackPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="disputes" element={<DisputesPage />} />
+          <Route path="payments" element={<PaymentsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
